@@ -176,6 +176,28 @@ public class TestCacheByPmemMappableBlockLoader {
     }
   }
 
+  protected static void restartCluster() throws Exception {
+    shutdownCluster();
+    conf = new HdfsConfiguration();
+    conf.setLong(
+        DFSConfigKeys.DFS_NAMENODE_PATH_BASED_CACHE_REFRESH_INTERVAL_MS, 100);
+    conf.setLong(DFSConfigKeys.DFS_CACHEREPORT_INTERVAL_MSEC_KEY, 500);
+    conf.setLong(DFSConfigKeys.DFS_BLOCK_SIZE_KEY, BLOCK_SIZE);
+    conf.setLong(DFSConfigKeys.DFS_DATANODE_MAX_LOCKED_MEMORY_KEY,
+        CACHE_CAPACITY);
+    conf.setLong(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 1);
+    conf.setInt(DFS_DATANODE_FSDATASETCACHE_MAX_THREADS_PER_VOLUME_KEY, 10);
+
+    cluster = new MiniDFSCluster.Builder(conf)
+        .numDataNodes(1).build();
+    cluster.waitActive();
+
+    fs = cluster.getFileSystem();
+    dn = cluster.getDataNodes().get(0);
+    cacheManager = ((FsDatasetImpl) dn.getFSDataset()).cacheManager;
+    cacheLoader = (PmemMappableBlockLoader) cacheManager.getCacheLoader();
+  }
+
   @Test
   public void testPmemVolumeManager() throws IOException {
     PmemVolumeManager pmemVolumeManager = PmemVolumeManager.getInstance();
@@ -321,5 +343,90 @@ public class TestCacheByPmemMappableBlockLoader {
     assertEquals(0, cacheManager.getPmemCacheUsed());
     // No record should be kept by blockKeyToVolume after testFile is uncached.
     assertEquals(blockKeyToVolume.size(), 0);
+  }
+
+  @Test(timeout = 60000)
+  public void testCacheRestore() throws Exception {
+    final int maxCacheBlocksNum =
+        Ints.checkedCast(CACHE_CAPACITY / BLOCK_SIZE);
+    BlockReaderTestUtil.enableHdfsCachingTracing();
+    Assert.assertEquals(0, CACHE_CAPACITY % BLOCK_SIZE);
+//    assertEquals(CACHE_CAPACITY, cacheManager.getPmemCacheCapacity());
+
+    final Path testFile = new Path("/testFile");
+    final long testFileLen = maxCacheBlocksNum * BLOCK_SIZE;
+    DFSTestUtil.createFile(fs, testFile,
+        testFileLen, (short) 1, 0xbeef);
+    List<ExtendedBlockId> blockKeys =
+        getExtendedBlockId(testFile, testFileLen);
+    fs.addCachePool(new CachePoolInfo("testPool"));
+    final long cacheDirectiveId = fs.addCacheDirective(
+        new CacheDirectiveInfo.Builder().setPool("testPool").
+            setPath(testFile).setReplication((short) 1).build());
+    // wait for caching
+    GenericTestUtils.waitFor(new Supplier<Boolean>() {
+      @Override
+      public Boolean get() {
+        MetricsRecordBuilder dnMetrics = getMetrics(dn.getMetrics().name());
+        long blocksCached =
+            MetricsAsserts.getLongCounter("BlocksCached", dnMetrics);
+        if (blocksCached != maxCacheBlocksNum) {
+          LOG.info("waiting for " + maxCacheBlocksNum + " blocks to " +
+              "be cached. Right now " + blocksCached + " blocks are cached.");
+          return false;
+        }
+        LOG.info(maxCacheBlocksNum + " blocks are now cached.");
+        return true;
+      }
+    }, 1000, 30000);
+
+    // The pmem cache space is expected to have been used up.
+//    assertEquals(CACHE_CAPACITY, cacheManager.getPmemCacheUsed());
+    Map<ExtendedBlockId, Byte> blockKeyToVolume =
+        PmemVolumeManager.getInstance().getBlockKeyToVolume();
+    // All block keys should be kept in blockKeyToVolume
+    assertEquals(blockKeyToVolume.size(), maxCacheBlocksNum);
+    assertTrue(blockKeyToVolume.keySet().containsAll(blockKeys));
+    // Test each replica's cache file path
+    for (ExtendedBlockId key : blockKeys) {
+      String cachePath = cacheManager.
+          getReplicaCachePath(key.getBlockPoolId(), key.getBlockId());
+      // The cachePath shouldn't be null if the replica has been cached
+      // to pmem.
+      assertNotNull(cachePath);
+      String expectFileName =
+          PmemVolumeManager.getInstance().getCacheFileName(key);
+      if (cachePath.startsWith(PMEM_DIR_0)) {
+        assertTrue(cachePath.equals(PmemVolumeManager
+            .getRealPmemDir(PMEM_DIR_0) + "/" + expectFileName));
+      } else if (cachePath.startsWith(PMEM_DIR_1)) {
+        assertTrue(cachePath.equals(PmemVolumeManager
+            .getRealPmemDir(PMEM_DIR_1) + "/" + expectFileName));
+      } else {
+        fail("The cache path is not the expected one: " + cachePath);
+      }
+    }
+
+//    //Trigger cache restore
+//    restartCluster();
+//    final long cacheId = fs.addCacheDirective(
+//        new CacheDirectiveInfo.Builder().setPool("testPool").
+//            setPath(testFile).setReplication((short) 1).build());
+//    // wait for caching
+//    GenericTestUtils.waitFor(new Supplier<Boolean>() {
+//      @Override
+//      public Boolean get() {
+//        MetricsRecordBuilder dnMetrics = getMetrics(dn.getMetrics().name());
+//        long blocksCached =
+//            MetricsAsserts.getLongCounter("BlocksCached", dnMetrics);
+//        if (blocksCached != maxCacheBlocksNum) {
+//          LOG.info("waiting for " + maxCacheBlocksNum + " blocks to " +
+//              "be cached. Right now " + blocksCached + " blocks are cached.");
+//          return false;
+//        }
+//        LOG.info(maxCacheBlocksNum + " blocks are now cached.");
+//        return true;
+//      }
+//    }, 1000, 30000);
   }
 }

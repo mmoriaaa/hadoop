@@ -18,11 +18,6 @@
 
 package org.apache.hadoop.hdfs.server.datanode.fsdataset.impl;
 
-import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_CACHE_REVOCATION_TIMEOUT_MS;
-import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_CACHE_REVOCATION_TIMEOUT_MS_DEFAULT;
-import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_CACHE_REVOCATION_POLLING_MS;
-import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_CACHE_REVOCATION_POLLING_MS_DEFAULT;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -34,6 +29,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -49,6 +45,7 @@ import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.fs.ChecksumException;
 import org.apache.hadoop.hdfs.ExtendedBlockId;
+import org.apache.hadoop.hdfs.HdfsConfiguration;
 import org.apache.hadoop.hdfs.protocol.BlockListAsLongs;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.server.datanode.DNConf;
@@ -56,6 +53,9 @@ import org.apache.hadoop.hdfs.server.datanode.DatanodeUtil;
 import org.apache.hadoop.util.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static org.apache.hadoop.hdfs.DFSConfigKeys.*;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_CACHE_PMEM_PERSISTENT_ENABLED_DEFAULT;
 
 /**
  * Manages caching for an FsDatasetImpl by using the mmap(2) and mlock(2)
@@ -254,6 +254,13 @@ public class FsDatasetCache {
     return blocks;
   }
 
+  void restoreBlock(ExtendedBlockId key, long length) {
+    MappableBlock mappableBlock = new PmemMappedBlock(length, key);
+    mappableBlockMap.put(key, new Value(mappableBlock, State.CACHED));
+    LOG.info("Restored the block [key=" + key + "]!");
+    return;
+  }
+
   /**
    * Attempt to begin caching a block.
    */
@@ -261,12 +268,27 @@ public class FsDatasetCache {
       String blockFileName, long length, long genstamp,
       Executor volumeExecutor) {
     ExtendedBlockId key = new ExtendedBlockId(blockId, bpid);
+    Map<ExtendedBlockId, Byte> blockKeyToVolume =
+        PmemVolumeManager.getInstance().getBlockKeyToVolume();
+    HdfsConfiguration conf = new HdfsConfiguration();
+    boolean persistentEnabled = conf.getBoolean(DFS_DATANODE_CACHE_PMEM_PERSISTENT_ENABLED_KEY,
+        DFS_DATANODE_CACHE_PMEM_PERSISTENT_ENABLED_DEFAULT);
+    if(persistentEnabled) {
+      if(blockKeyToVolume.containsKey(key)) {
+        restoreBlock(key, length);
+      }
+    }
     Value prevValue = mappableBlockMap.get(key);
     if (prevValue != null) {
       LOG.debug("Block with id {}, pool {} already exists in the "
-              + "FsDatasetCache with state {}", blockId, bpid, prevValue.state
+            + "FsDatasetCache with state {}", blockId, bpid, prevValue.state
       );
-      numBlocksFailedToCache.incrementAndGet();
+      if(persistentEnabled) {
+        numBlocksCached.addAndGet(1);
+        dataset.datanode.getMetrics().incrBlocksCached(1);
+      } else {
+        numBlocksFailedToCache.incrementAndGet();
+      }
       return;
     }
     mappableBlockMap.put(key, new Value(null, State.CACHING));

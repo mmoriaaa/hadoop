@@ -22,6 +22,7 @@ import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.hdfs.ExtendedBlockId;
+import org.apache.hadoop.hdfs.HdfsConfiguration;
 import org.apache.hadoop.hdfs.server.datanode.DNConf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +31,9 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;
+
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_CACHE_PMEM_PERSISTENT_ENABLED_DEFAULT;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_CACHE_PMEM_PERSISTENT_ENABLED_KEY;
 
 /**
  * Maps block to persistent memory by using mapped byte buffer.
@@ -138,7 +142,12 @@ public class PmemMappableBlockLoader extends MappableBlockLoader {
 
   @Override
   void shutdown() {
-    LOG.info("Clean up cache on persistent memory during shutdown.");
-    PmemVolumeManager.getInstance().cleanup();
+    HdfsConfiguration conf = new HdfsConfiguration();
+    boolean persistentEnabled = conf.getBoolean(DFS_DATANODE_CACHE_PMEM_PERSISTENT_ENABLED_KEY,
+        DFS_DATANODE_CACHE_PMEM_PERSISTENT_ENABLED_DEFAULT);
+    if(!persistentEnabled) {
+      LOG.info("Clean up cache on persistent memory during shutdown.");
+      PmemVolumeManager.getInstance().cleanup();
+    }
   }
 }
