@@ -21,10 +21,12 @@ package org.apache.hadoop.hdfs.server.datanode.fsdataset.impl;
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.io.filefilter.TrueFileFilter;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.ExtendedBlockId;
+import org.apache.hadoop.hdfs.server.datanode.DNConf;
 import org.apache.hadoop.io.nativeio.NativeIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,6 +37,7 @@ import java.io.RandomAccessFile;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -68,15 +71,19 @@ public final class PmemVolumeManager {
      *                      -1 if we failed.
      */
     long reserve(long bytesCount) {
-      while (true) {
-        long cur = usedBytes.get();
-        long next = cur + bytesCount;
-        if (next > maxBytes) {
-          return -1;
+      if(bytesCount > 0) {
+        while (true) {
+          long cur = usedBytes.get();
+          long next = cur + bytesCount;
+          if (next > maxBytes) {
+            return -1;
+          }
+          if (usedBytes.compareAndSet(cur, next)) {
+            return next;
+          }
         }
-        if (usedBytes.compareAndSet(cur, next)) {
-          return next;
-        }
+      } else {
+        return usedBytes.get();
       }
     }
 
@@ -113,6 +120,7 @@ public final class PmemVolumeManager {
   private final Map<ExtendedBlockId, Byte> blockKeyToVolume =
       new ConcurrentHashMap<>();
   private final List<UsedBytesCount> usedBytesCounts = new ArrayList<>();
+  private static boolean persistentEnabled;
 
   /**
    * The total cache capacity in bytes of persistent memory.
@@ -128,18 +136,23 @@ public final class PmemVolumeManager {
           DFSConfigKeys.DFS_DATANODE_CACHE_PMEM_DIRS_KEY +
           " is not configured!");
     }
-    this.loadVolumes(pmemVolumesConfig);
+    if(persistentEnabled) {
+      this.restoreVolumes(pmemVolumesConfig);
+    } else {
+      this.loadVolumes(pmemVolumesConfig);
+    }
     cacheCapacity = 0L;
     for (UsedBytesCount counter : usedBytesCounts) {
       cacheCapacity += counter.getMaxBytes();
     }
   }
 
-  public synchronized static void init(String[] pmemVolumesConfig)
+  public synchronized static void init(String[] pmemVolumesConfig, DNConf dnConf)
       throws IOException {
     if (pmemVolumeManager == null) {
       pmemVolumeManager = new PmemVolumeManager(pmemVolumesConfig);
     }
+    persistentEnabled = dnConf.getPersistentEnabled();
   }
 
   public static PmemVolumeManager getInstance() {
@@ -253,6 +266,60 @@ public final class PmemVolumeManager {
       } catch (IOException e) {
         LOG.error("Failed to clean up " + pmemDir, e);
       }
+    }
+  }
+
+  /**
+   * Load and verify the configured pmem volumes.
+   *
+   * @throws IOException   If there is no available pmem volume.
+   */
+  private void restoreVolumes(String[] volumes)
+      throws IOException {
+    // Check whether the volume exists
+    for (byte n = 0; n < volumes.length; n++) {
+      try {
+        File pmemDir = new File(volumes[n]);
+        File realPmemDir = verifyIfValidPmemVolume(pmemDir);
+        this.pmemVolumes.add(realPmemDir.getPath());
+        long usableBytes = realPmemDir.getUsableSpace();
+        long maxBytes = usableBytes;
+
+        String realPmemPath = realPmemDir.getPath();
+        Collection<File> fileList = FileUtils.listFiles(new File(realPmemPath),
+            TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE);
+        for(File f : fileList) {
+          if(f.getName().startsWith(realPmemPath)) {
+            maxBytes += f.length();
+            String keyStr = f.getName().substring(realPmemPath.length());
+            String[] bid = keyStr.split("-");
+            if(bid.length == 2) {
+              long blockId = Long.parseLong(bid[0]);
+              String bpid = bid[1];
+              ExtendedBlockId key = new ExtendedBlockId(blockId, bpid);
+              blockKeyToVolume.put(key, n);
+            } else {
+              LOG.error("Block ID Mismatch");
+            }
+          }
+        }
+        UsedBytesCount usedBytesCount = new UsedBytesCount(maxBytes);
+        usedBytesCount.reserve(maxBytes - usableBytes);
+        this.usedBytesCounts.add(usedBytesCount);
+        LOG.info("Added persistent memory - {} with size={}",
+            volumes[n], maxBytes);
+      } catch (IllegalArgumentException e) {
+        LOG.error("Failed to parse persistent memory volume " + volumes[n], e);
+        continue;
+      } catch (IOException e) {
+        LOG.error("Bad persistent memory volume: " + volumes[n], e);
+        continue;
+      }
+    }
+    count = pmemVolumes.size();
+    if (count == 0) {
+      throw new IOException(
+          "At least one valid persistent memory volume is required!");
     }
   }
 
