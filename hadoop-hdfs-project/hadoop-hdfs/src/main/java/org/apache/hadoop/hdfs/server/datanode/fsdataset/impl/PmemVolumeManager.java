@@ -137,7 +137,7 @@ public final class PmemVolumeManager {
           " is not configured!");
     }
     if(persistentEnabled) {
-      this.restoreVolumes(pmemVolumesConfig);
+      this.restoreCache(pmemVolumesConfig);
     } else {
       this.loadVolumes(pmemVolumesConfig);
     }
@@ -149,10 +149,14 @@ public final class PmemVolumeManager {
 
   public synchronized static void init(String[] pmemVolumesConfig, DNConf dnConf)
       throws IOException {
+    persistentEnabled = dnConf.getPersistentEnabled();
+    if(persistentEnabled) {
+      pmemVolumeManager = null;
+      pmemVolumeManager = new PmemVolumeManager(pmemVolumesConfig);
+    }
     if (pmemVolumeManager == null) {
       pmemVolumeManager = new PmemVolumeManager(pmemVolumesConfig);
     }
-    persistentEnabled = dnConf.getPersistentEnabled();
   }
 
   public static PmemVolumeManager getInstance() {
@@ -279,7 +283,7 @@ public final class PmemVolumeManager {
    *
    * @throws IOException   If there is no available pmem volume.
    */
-  private void restoreVolumes(String[] volumes)
+  private void restoreCache(String[] volumes)
       throws IOException {
     // Check whether the volume exists
     for (byte n = 0; n < volumes.length; n++) {
@@ -290,22 +294,18 @@ public final class PmemVolumeManager {
         long usableBytes = realPmemDir.getUsableSpace();
         long maxBytes = usableBytes;
 
-        String realPmemPath = realPmemDir.getPath();
-        Collection<File> fileList = FileUtils.listFiles(new File(realPmemPath),
+        Collection<File> fileList = FileUtils.listFiles(new File(realPmemDir.getPath()),
             TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE);
         for(File f : fileList) {
-          if(f.getName().startsWith(realPmemPath)) {
-            maxBytes += f.length();
-            String keyStr = f.getName().substring(realPmemPath.length());
-            String[] bid = keyStr.split("-");
-            if(bid.length == 2) {
-              long blockId = Long.parseLong(bid[0]);
-              String bpid = bid[1];
-              ExtendedBlockId key = new ExtendedBlockId(blockId, bpid);
-              blockKeyToVolume.put(key, n);
-            } else {
-              LOG.error("Block ID Mismatch");
-            }
+          maxBytes += f.length();
+          String[] bid = f.getName().split("-");
+          if(bid.length == 5) {
+            long blockId = Long.parseLong(bid[4]);
+            String bpid = bid[0] + "-" + bid[1] + "-" + bid[2] + "-" + bid[3];
+            ExtendedBlockId key = new ExtendedBlockId(blockId, bpid);
+            blockKeyToVolume.put(key, n);
+          } else {
+            LOG.error("Block ID Mismatch");
           }
         }
         UsedBytesCount usedBytesCount = new UsedBytesCount(maxBytes);
