@@ -21,6 +21,7 @@ package org.apache.hadoop.hdfs.server.datanode.fsdataset.impl;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -49,6 +50,7 @@ import org.apache.hadoop.hdfs.protocol.BlockListAsLongs;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.server.datanode.DNConf;
 import org.apache.hadoop.hdfs.server.datanode.DatanodeUtil;
+import org.apache.hadoop.hdfs.server.datanode.ReplicaInfo;
 import org.apache.hadoop.util.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -181,6 +183,36 @@ public class FsDatasetCache {
         this.getDnConf());
     // Both lazy writer and read cache are sharing this statistics.
     this.memCacheStats = cacheLoader.initialize(this.getDnConf());
+    if(isPmemCache() && getDnConf().getPersistentEnabled()) {
+      restoreBlock(dataset);
+    }
+  }
+
+  private boolean isPmemCache() {
+    //*** why always false?
+    if(cacheLoader instanceof PmemMappableBlockLoader
+        || cacheLoader instanceof NativePmemMappableBlockLoader) {
+      return true;
+    }
+    return false;
+  }
+
+  private void restoreBlock(FsDatasetImpl dataset) {
+    Map<ExtendedBlockId, Byte> blockKeyToVolume =
+        PmemVolumeManager.getInstance().getBlockKeyToVolume();
+    for(ExtendedBlockId key : blockKeyToVolume.keySet()) {
+      String cachePath = PmemVolumeManager.getInstance().getCachePath(key);
+      //error that should not occur
+      if(cachePath != null) {
+        File file = new File(cachePath);
+        long length = file.length();
+        MappableBlock mappableBlock = new PmemMappedBlock(length, key);
+        mappableBlockMap.put(key, new Value(mappableBlock, State.CACHED));
+        numBlocksCached.addAndGet(1);
+        dataset.datanode.getMetrics().incrBlocksCached(1);
+        LOG.info("Restored the block [key=" + key + "]!");
+      }
+    }
   }
 
   DNConf getDnConf() {
@@ -239,13 +271,6 @@ public class FsDatasetCache {
     return blocks;
   }
 
-  void restoreBlock(ExtendedBlockId key, long length) {
-    MappableBlock mappableBlock = new PmemMappedBlock(length, key);
-    mappableBlockMap.put(key, new Value(mappableBlock, State.CACHED));
-    LOG.info("Restored the block [key=" + key + "]!");
-    return;
-  }
-
   /**
    * Attempt to begin caching a block.
    */
@@ -253,25 +278,12 @@ public class FsDatasetCache {
       String blockFileName, long length, long genstamp,
       Executor volumeExecutor) {
     ExtendedBlockId key = new ExtendedBlockId(blockId, bpid);
-    Map<ExtendedBlockId, Byte> blockKeyToVolume =
-        PmemVolumeManager.getInstance().getBlockKeyToVolume();
-    boolean persistentEnabled = getDnConf().getPersistentEnabled();
-    if(persistentEnabled) {
-      if(blockKeyToVolume.containsKey(key)) {
-        restoreBlock(key, length);
-      }
-    }
     Value prevValue = mappableBlockMap.get(key);
     if (prevValue != null) {
       LOG.debug("Block with id {}, pool {} already exists in the "
               + "FsDatasetCache with state {}", blockId, bpid, prevValue.state
       );
-      if(persistentEnabled) {
-        numBlocksCached.addAndGet(1);
-        dataset.datanode.getMetrics().incrBlocksCached(1);
-      } else {
-        numBlocksFailedToCache.incrementAndGet();
-      }
+      numBlocksFailedToCache.incrementAndGet();
       return;
     }
     mappableBlockMap.put(key, new Value(null, State.CACHING));

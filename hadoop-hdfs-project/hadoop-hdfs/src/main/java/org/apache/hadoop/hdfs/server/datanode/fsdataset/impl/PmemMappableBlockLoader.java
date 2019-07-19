@@ -18,6 +18,7 @@
 
 package org.apache.hadoop.hdfs.server.datanode.fsdataset.impl;
 
+import com.google.common.annotations.VisibleForTesting;
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
@@ -40,14 +41,14 @@ public class PmemMappableBlockLoader extends MappableBlockLoader {
   private static final Logger LOG =
       LoggerFactory.getLogger(PmemMappableBlockLoader.class);
   private PmemVolumeManager pmemVolumeManager;
-  private boolean persistentEnabled;
+  private static boolean persistentEnabled;
 
   @Override
   CacheStats initialize(DNConf dnConf) throws IOException {
     LOG.info("Initializing cache loader: " + this.getClass().getName());
     PmemVolumeManager.init(dnConf.getPmemVolumes(), dnConf);
     pmemVolumeManager = PmemVolumeManager.getInstance();
-    this.persistentEnabled = dnConf.getPersistentEnabled();
+    PmemMappableBlockLoader.persistentEnabled = dnConf.getPersistentEnabled();
     // The configuration for max locked memory is shaded.
     LOG.info("Persistent memory is used for caching data instead of " +
         "DRAM. Max locked memory is set to zero to disable DRAM cache");
