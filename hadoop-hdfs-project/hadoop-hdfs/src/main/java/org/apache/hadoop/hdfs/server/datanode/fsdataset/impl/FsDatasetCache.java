@@ -18,6 +18,11 @@
 
 package org.apache.hadoop.hdfs.server.datanode.fsdataset.impl;
 
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_CACHE_REVOCATION_TIMEOUT_MS;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_CACHE_REVOCATION_TIMEOUT_MS_DEFAULT;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_CACHE_REVOCATION_POLLING_MS;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_CACHE_REVOCATION_POLLING_MS_DEFAULT;
+
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
@@ -45,17 +50,13 @@ import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.fs.ChecksumException;
 import org.apache.hadoop.hdfs.ExtendedBlockId;
-import org.apache.hadoop.hdfs.HdfsConfiguration;
 import org.apache.hadoop.hdfs.protocol.BlockListAsLongs;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.server.datanode.DNConf;
 import org.apache.hadoop.hdfs.server.datanode.DatanodeUtil;
-import org.apache.hadoop.hdfs.server.datanode.ReplicaInfo;
 import org.apache.hadoop.util.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import static org.apache.hadoop.hdfs.DFSConfigKeys.*;
 
 /**
  * Manages caching for an FsDatasetImpl by using the mmap(2) and mlock(2)
@@ -183,34 +184,31 @@ public class FsDatasetCache {
         this.getDnConf());
     // Both lazy writer and read cache are sharing this statistics.
     this.memCacheStats = cacheLoader.initialize(this.getDnConf());
-    if(isPmemCache() && getDnConf().getPersistentEnabled()) {
-      restoreBlock(dataset);
-    }
   }
 
   private boolean isPmemCache() {
-    //*** why always false?
-    if(cacheLoader instanceof PmemMappableBlockLoader
-        || cacheLoader instanceof NativePmemMappableBlockLoader) {
+    if(cacheLoader instanceof PmemMappableBlockLoader) {
       return true;
     }
     return false;
   }
 
-  private void restoreBlock(FsDatasetImpl dataset) {
-    Map<ExtendedBlockId, Byte> blockKeyToVolume =
-        PmemVolumeManager.getInstance().getBlockKeyToVolume();
-    for(ExtendedBlockId key : blockKeyToVolume.keySet()) {
-      String cachePath = PmemVolumeManager.getInstance().getCachePath(key);
-      //error that should not occur
-      if(cachePath != null) {
-        File file = new File(cachePath);
-        long length = file.length();
-        MappableBlock mappableBlock = new PmemMappedBlock(length, key);
-        mappableBlockMap.put(key, new Value(mappableBlock, State.CACHED));
-        numBlocksCached.addAndGet(1);
-        dataset.datanode.getMetrics().incrBlocksCached(1);
-        LOG.info("Restored the block [key=" + key + "]!");
+  public void restoreCache(String bpid) throws IOException {
+    if(isPmemCache() && getDnConf().getPersistentEnabled()) {
+      PmemVolumeManager.getInstance().restoreCache(bpid);
+      Map<ExtendedBlockId, Byte> blockKeyToVolume =
+          PmemVolumeManager.getInstance().getBlockKeyToVolume();
+      for(ExtendedBlockId key : blockKeyToVolume.keySet()) {
+        String cachePath = PmemVolumeManager.getInstance().getCachePath(key);
+        if(cachePath != null) {
+          File file = new File(cachePath);
+          long length = file.length();
+          MappableBlock mappableBlock = new PmemMappedBlock(length, key);
+          mappableBlockMap.put(key, new Value(mappableBlock, State.CACHED));
+          numBlocksCached.addAndGet(1);
+          dataset.datanode.getMetrics().incrBlocksCached(1);
+          LOG.info("Restored the block [key=" + key + "]!");
+        }
       }
     }
   }

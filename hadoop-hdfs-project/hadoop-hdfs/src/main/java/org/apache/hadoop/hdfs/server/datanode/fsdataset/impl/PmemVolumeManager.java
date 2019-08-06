@@ -55,7 +55,7 @@ public final class PmemVolumeManager {
    * Counts used bytes for persistent memory.
    */
   private static class UsedBytesCount {
-    private final long maxBytes;
+    private long maxBytes;
     private final AtomicLong usedBytes = new AtomicLong(0);
 
     UsedBytesCount(long maxBytes) {
@@ -109,6 +109,10 @@ public final class PmemVolumeManager {
     long getAvailableBytes() {
       return maxBytes - usedBytes.get();
     }
+
+    void setMaxBytes(long maxBytes) {
+      this.maxBytes = maxBytes;
+    }
   }
 
   private static final Logger LOG =
@@ -136,11 +140,7 @@ public final class PmemVolumeManager {
           DFSConfigKeys.DFS_DATANODE_CACHE_PMEM_DIRS_KEY +
           " is not configured!");
     }
-    if(persistentEnabled) {
-      this.restoreCache(pmemVolumesConfig);
-    } else {
-      this.loadVolumes(pmemVolumesConfig);
-    }
+    this.loadVolumes(pmemVolumesConfig);
     cacheCapacity = 0L;
     for (UsedBytesCount counter : usedBytesCounts) {
       cacheCapacity += counter.getMaxBytes();
@@ -152,7 +152,6 @@ public final class PmemVolumeManager {
     persistentEnabled = dnConf.getPersistentEnabled();
     if(persistentEnabled) {
       pmemVolumeManager = null;
-      pmemVolumeManager = new PmemVolumeManager(pmemVolumesConfig);
     }
     if (pmemVolumeManager == null) {
       pmemVolumeManager = new PmemVolumeManager(pmemVolumesConfig);
@@ -235,6 +234,10 @@ public final class PmemVolumeManager {
       try {
         File pmemDir = new File(volumes[n]);
         File realPmemDir = verifyIfValidPmemVolume(pmemDir);
+        if(!persistentEnabled) {
+          // Clean up the cache left before, if any.
+          cleanup(realPmemDir);
+        }
         this.pmemVolumes.add(realPmemDir.getPath());
         long maxBytes;
         if (maxBytesPerPmem == -1) {
@@ -259,67 +262,49 @@ public final class PmemVolumeManager {
       throw new IOException(
           "At least one valid persistent memory volume is required!");
     }
-    cleanup();
+  }
+
+  void cleanup(File realPmemDir) {
+    // Remove all files under the volume.
+    try {
+      FileUtils.cleanDirectory(realPmemDir);
+    } catch (IOException e) {
+      LOG.error("Failed to clean up " + realPmemDir.getPath(), e);
+    }
   }
 
   void cleanup() {
-    // Remove all files under the volume.
-    for (String pmemDir: pmemVolumes) {
-      try {
-        FileUtils.cleanDirectory(new File(pmemDir));
-      } catch (IOException e) {
-        LOG.error("Failed to clean up " + pmemDir, e);
-      }
+    for (String pmemVolume : pmemVolumes) {
+      cleanup(new File(pmemVolume));
     }
   }
 
   /**
-   * Load and verify the configured pmem volumes.
-   *
-   * @throws IOException   If there is no available pmem volume.
+   * Restore cache in the configured pmem volumes.
    */
-  private void restoreCache(String[] volumes)
-      throws IOException {
-    // Check whether the volume exists
-    for (byte n = 0; n < volumes.length; n++) {
-      try {
-        File pmemDir = new File(volumes[n]);
-        File realPmemDir = verifyIfValidPmemVolume(pmemDir);
-        this.pmemVolumes.add(realPmemDir.getPath());
-        long usableBytes = realPmemDir.getUsableSpace();
+  public void restoreCache(String bpid) throws IOException {
+    for (byte n = 0; n < pmemVolumes.size(); n++) {
+      long usableBytes = new File(pmemVolumes.get(n)).getUsableSpace();
+      File cacheDir = new File(pmemVolumes.get(n), bpid);
+      if (cacheDir.exists()) {
         long maxBytes = usableBytes;
-
-        Collection<File> fileList = FileUtils.listFiles(new File(realPmemDir.getPath()),
+        Collection<File> fileList = FileUtils.listFiles(new File(cacheDir.getPath()),
             TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE);
-        for(File f : fileList) {
+        for (File f : fileList) {
           maxBytes += f.length();
           String[] bid = f.getName().split("-");
-          if(bid.length == 5) {
+          if (bid.length == 5) {
             long blockId = Long.parseLong(bid[4]);
-            String bpid = bid[0] + "-" + bid[1] + "-" + bid[2] + "-" + bid[3];
             ExtendedBlockId key = new ExtendedBlockId(blockId, bpid);
             blockKeyToVolume.put(key, n);
           } else {
-            LOG.error("Block ID Mismatch");
+            throw new IOException("Block ID Mismatch");
           }
         }
-        UsedBytesCount usedBytesCount = new UsedBytesCount(maxBytes);
-        usedBytesCount.reserve(maxBytes - usableBytes);
-        this.usedBytesCounts.add(usedBytesCount);
-        LOG.info("Added persistent memory - {} with size={}",
-            volumes[n], maxBytes);
-      } catch (IllegalArgumentException e) {
-        LOG.error("Failed to parse persistent memory volume " + volumes[n], e);
-        continue;
-      } catch (IOException e) {
-        LOG.error("Bad persistent memory volume: " + volumes[n], e);
-        continue;
+        usedBytesCounts.get(n).setMaxBytes(maxBytes);
+        cacheCapacity += (maxBytes - usableBytes);
+        usedBytesCounts.get(n).reserve(maxBytes - usableBytes);
       }
-    }
-    count = pmemVolumes.size();
-    if (count == 0) {
-      throw new IOException(
-          "At least one valid persistent memory volume is required!");
     }
   }
 
@@ -417,6 +402,10 @@ public final class PmemVolumeManager {
     return pmemVolumes.get(index);
   }
 
+  ArrayList<String> getVolumes() {
+    return pmemVolumes;
+  }
+
   /**
    * The cache file is named as BlockPoolId-BlockId.
    * So its name can be inferred by BlockPoolId and BlockId.
@@ -439,11 +428,12 @@ public final class PmemVolumeManager {
    * @return              A path to which the block replica is mapped.
    */
   public String inferCacheFilePath(Byte volumeIndex, ExtendedBlockId key) {
-    return pmemVolumes.get(volumeIndex) + "/" + getCacheFileName(key);
+    String bpid = key.getBlockPoolId();
+    return pmemVolumes.get(volumeIndex) + "/" + bpid + "/" + getCacheFileName(key);
   }
 
   /**
-   * The cache file path is pmemVolume/BlockPoolId-BlockId.
+   * The cache file path is pmemVolume/BlockPoolId/BlockPoolId-BlockId.
    */
   public String getCachePath(ExtendedBlockId key) {
     Byte volumeIndex = blockKeyToVolume.get(key);

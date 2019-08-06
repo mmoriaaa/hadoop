@@ -82,6 +82,7 @@ public class TestPmemCacheRestore {
   private static DistributedFileSystem fs;
   private static DataNode dn;
   private static FsDatasetCache cacheManager;
+  private static String bpid = "";
   /**
    * Used to pause DN BPServiceActor threads. BPSA threads acquire the
    * shared read lock. The test acquires the write lock for exclusive access.
@@ -163,13 +164,6 @@ public class TestPmemCacheRestore {
     NativeIO.POSIX.setCacheManipulator(prevCacheManipulator);
   }
 
-  protected static void shutdownCluster() {
-    if (cluster != null) {
-      cluster.shutdown();
-      cluster = null;
-    }
-  }
-
   protected static void restartCluster() throws Exception {
     conf = new HdfsConfiguration();
     conf.setBoolean(DFS_DATANODE_CACHE_PMEM_PERSISTENT_ENABLED_KEY, true);
@@ -185,6 +179,7 @@ public class TestPmemCacheRestore {
     prevCacheManipulator = NativeIO.POSIX.getCacheManipulator();
     NativeIO.POSIX.setCacheManipulator(new NoMlockCacheManipulator());
 
+    FsDatasetImpl.setBlockPoolId(bpid);
     cluster = new MiniDFSCluster.Builder(conf)
         .numDataNodes(1).build();
     cluster.waitActive();
@@ -192,6 +187,13 @@ public class TestPmemCacheRestore {
     fs = cluster.getFileSystem();
     dn = cluster.getDataNodes().get(0);
     cacheManager = ((FsDatasetImpl) dn.getFSDataset()).cacheManager;
+  }
+
+  protected static void shutdownCluster() {
+    if (cluster != null) {
+      cluster.shutdown();
+      cluster = null;
+    }
   }
 
   public List<ExtendedBlockId> getExtendedBlockId(Path filePath, long fileLen)
@@ -249,6 +251,9 @@ public class TestPmemCacheRestore {
     assertTrue(blockKeyToVolume.keySet().containsAll(blockKeys));
     // Test each replica's cache file path
     for (ExtendedBlockId key : blockKeys) {
+      if(bpid.isEmpty()) {
+        bpid = key.getBlockPoolId();
+      }
       String cachePath = cacheManager.
           getReplicaCachePath(key.getBlockPoolId(), key.getBlockId());
       // The cachePath shouldn't be null if the replica has been cached
@@ -258,10 +263,10 @@ public class TestPmemCacheRestore {
           PmemVolumeManager.getInstance().getCacheFileName(key);
       if (cachePath.startsWith(PMEM_DIR_0)) {
         assertTrue(cachePath.equals(PmemVolumeManager
-            .getRealPmemDir(PMEM_DIR_0) + "/" + expectFileName));
+            .getRealPmemDir(PMEM_DIR_0) + "/" + key.getBlockPoolId() + "/" + expectFileName));
       } else if (cachePath.startsWith(PMEM_DIR_1)) {
         assertTrue(cachePath.equals(PmemVolumeManager
-            .getRealPmemDir(PMEM_DIR_1) + "/" + expectFileName));
+            .getRealPmemDir(PMEM_DIR_1) + "/" + key.getBlockPoolId() + "/" + expectFileName));
       } else {
         fail("The cache path is not the expected one: " + cachePath);
       }
@@ -287,10 +292,10 @@ public class TestPmemCacheRestore {
           PmemVolumeManager.getInstance().getCacheFileName(key);
       if (cachePath.startsWith(PMEM_DIR_0)) {
         assertTrue(cachePath.equals(PmemVolumeManager
-            .getRealPmemDir(PMEM_DIR_0) + "/" + expectFileName));
+            .getRealPmemDir(PMEM_DIR_0) + "/" + key.getBlockPoolId() + "/" + expectFileName));
       } else if (cachePath.startsWith(PMEM_DIR_1)) {
         assertTrue(cachePath.equals(PmemVolumeManager
-            .getRealPmemDir(PMEM_DIR_1) + "/" + expectFileName));
+            .getRealPmemDir(PMEM_DIR_1) + "/" + key.getBlockPoolId() + "/" + expectFileName));
       } else {
         fail("The cache path is not the expected one: " + cachePath);
       }
