@@ -18,7 +18,6 @@
 
 package org.apache.hadoop.hdfs.server.datanode.fsdataset.impl;
 
-import com.google.common.annotations.VisibleForTesting;
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
@@ -83,6 +82,7 @@ public class PmemMappableBlockLoader extends MappableBlockLoader {
       throws IOException {
     PmemMappedBlock mappableBlock = null;
     String cachePath = null;
+    String bpid =  key.getBlockPoolId();
 
     FileChannel blockChannel = null;
     RandomAccessFile cacheFile = null;

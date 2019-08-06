@@ -273,6 +273,7 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
   @VisibleForTesting
   final AutoCloseableLock datasetLock;
   private final Condition datasetLockCondition;
+  private static String blockPoolId = "";
   
   /**
    * An FSDataset has a directory where it loads its data files.
@@ -2846,6 +2847,23 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
     if (volumeExceptions.hasExceptions()) {
       throw volumeExceptions;
     }
+
+    if(!blockPoolId.isEmpty()) {
+      bpid = blockPoolId;
+    }
+    ArrayList<String> pmemVolumes = PmemVolumeManager.getInstance().getVolumes();
+    for (String volume : pmemVolumes) {
+      File cacheDir = new File(volume, bpid);
+      if (!cacheDir.exists() && !cacheDir.mkdir()) {
+        throw new IOException("Failed to create " + cacheDir.getPath());
+      }
+    }
+    cacheManager.restoreCache(bpid);
+  }
+
+  @VisibleForTesting
+  public static void setBlockPoolId(String bpid) {
+    blockPoolId = bpid;
   }
 
   @Override
