@@ -125,7 +125,7 @@ public class TestPmemCacheRestore {
   @Before
   public void setUp() throws Exception {
     conf = new HdfsConfiguration();
-    conf.setBoolean(DFS_DATANODE_CACHE_PMEM_PERSISTENT_ENABLED_KEY, true);
+    conf.setBoolean(DFS_DATANODE_CACHE_PERSISTENCE_ENABLED_KEY, true);
     conf.setLong(
         DFSConfigKeys.DFS_NAMENODE_PATH_BASED_CACHE_REFRESH_INTERVAL_MS, 100);
     conf.setLong(DFSConfigKeys.DFS_CACHEREPORT_INTERVAL_MSEC_KEY, 500);
@@ -166,7 +166,7 @@ public class TestPmemCacheRestore {
 
   protected static void restartCluster() throws Exception {
     conf = new HdfsConfiguration();
-    conf.setBoolean(DFS_DATANODE_CACHE_PMEM_PERSISTENT_ENABLED_KEY, true);
+    conf.setBoolean(DFS_DATANODE_CACHE_PERSISTENCE_ENABLED_KEY, true);
     conf.setLong(
         DFSConfigKeys.DFS_NAMENODE_PATH_BASED_CACHE_REFRESH_INTERVAL_MS, 100);
     conf.setLong(DFSConfigKeys.DFS_CACHEREPORT_INTERVAL_MSEC_KEY, 500);

@@ -124,7 +124,7 @@ public final class PmemVolumeManager {
   private final Map<ExtendedBlockId, Byte> blockKeyToVolume =
       new ConcurrentHashMap<>();
   private final List<UsedBytesCount> usedBytesCounts = new ArrayList<>();
-  private static boolean persistentEnabled;
+  private static boolean persistCacheEnabled;
 
   /**
    * The total cache capacity in bytes of persistent memory.
@@ -149,8 +149,8 @@ public final class PmemVolumeManager {
 
   public synchronized static void init(String[] pmemVolumesConfig, DNConf dnConf)
       throws IOException {
-    persistentEnabled = dnConf.getPersistentEnabled();
-    if(persistentEnabled) {
+    persistCacheEnabled = dnConf.getPersistCacheEnabled();
+    if(persistCacheEnabled) {
       pmemVolumeManager = null;
     }
     if (pmemVolumeManager == null) {
@@ -234,7 +234,7 @@ public final class PmemVolumeManager {
       try {
         File pmemDir = new File(volumes[n]);
         File realPmemDir = verifyIfValidPmemVolume(pmemDir);
-        if(!persistentEnabled) {
+        if(!persistCacheEnabled) {
           // Clean up the cache left before, if any.
           cleanup(realPmemDir);
         }
@@ -284,26 +284,29 @@ public final class PmemVolumeManager {
    */
   public void restoreCache(String bpid) throws IOException {
     for (byte n = 0; n < pmemVolumes.size(); n++) {
-      long usableBytes = new File(pmemVolumes.get(n)).getUsableSpace();
+      long maxBytes = usedBytesCounts.get(n).getMaxBytes();
+      long usedBytes = 0;
       File cacheDir = new File(pmemVolumes.get(n), bpid);
       if (cacheDir.exists()) {
-        long maxBytes = usableBytes;
-        Collection<File> fileList = FileUtils.listFiles(new File(cacheDir.getPath()),
+        Collection<File> cachedFileList = FileUtils.listFiles(new File(cacheDir.getPath()),
             TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE);
-        for (File f : fileList) {
-          maxBytes += f.length();
-          String[] bid = f.getName().split("-");
-          if (bid.length == 5) {
-            long blockId = Long.parseLong(bid[4]);
-            ExtendedBlockId key = new ExtendedBlockId(blockId, bpid);
+        //Scan the cached files in pmem volumes for cache restore.
+        for (File cachedFile : cachedFileList) {
+          usedBytes += cachedFile.length();
+          String[] bid = cachedFile.getName().split("-");
+          String blockId = bid[bid.length - 1];
+          String blockPoolId = cachedFile.getName().replace("-" + blockId, "");
+          if (blockPoolId.equals(bpid)) {
+            ExtendedBlockId key = new ExtendedBlockId(Long.parseLong(blockId), bpid);
             blockKeyToVolume.put(key, n);
           } else {
-            throw new IOException("Block ID Mismatch");
+            throw new IOException("Illegal cache file name, it should be named by BlockPoolId-BlockId");
           }
         }
-        usedBytesCounts.get(n).setMaxBytes(maxBytes);
-        cacheCapacity += (maxBytes - usableBytes);
-        usedBytesCounts.get(n).reserve(maxBytes - usableBytes);
+        //Update maxBytes and cache capacity according to cache space used by restored cached files.
+        usedBytesCounts.get(n).setMaxBytes(maxBytes + usedBytes);
+        cacheCapacity += usedBytes;
+        usedBytesCounts.get(n).reserve(usedBytes);
       }
     }
   }

@@ -186,15 +186,8 @@ public class FsDatasetCache {
     this.memCacheStats = cacheLoader.initialize(this.getDnConf());
   }
 
-  private boolean isPmemCache() {
-    if(cacheLoader instanceof PmemMappableBlockLoader) {
-      return true;
-    }
-    return false;
-  }
-
   public void restoreCache(String bpid) throws IOException {
-    if(isPmemCache() && getDnConf().getPersistentEnabled()) {
+    if(!cacheLoader.isTransientCache() && getDnConf().getPersistCacheEnabled()) {
       PmemVolumeManager.getInstance().restoreCache(bpid);
       Map<ExtendedBlockId, Byte> blockKeyToVolume =
           PmemVolumeManager.getInstance().getBlockKeyToVolume();
@@ -207,7 +200,7 @@ public class FsDatasetCache {
           mappableBlockMap.put(key, new Value(mappableBlock, State.CACHED));
           numBlocksCached.addAndGet(1);
           dataset.datanode.getMetrics().incrBlocksCached(1);
-          LOG.info("Restored the block [key=" + key + "]!");
+          LOG.info("Restored the persistent cache for block [key=" + key + "]!");
         }
       }
     }

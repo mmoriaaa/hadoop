@@ -2577,6 +2577,15 @@
 </property>
 
 <property>
+  <name>dfs.datanode.cache.persistence.enabled</name>
+  <value>false</value>
+  <description>
+    This value specifies whether persistent cache is enabled. This configuration is
+    valid only if the pmem persistent cache is enabled.
+  </description>
+</property>
+
+<property>
   <name>dfs.namenode.list.cache.directives.num.responses</name>
   <value>100</value>
   <description>
