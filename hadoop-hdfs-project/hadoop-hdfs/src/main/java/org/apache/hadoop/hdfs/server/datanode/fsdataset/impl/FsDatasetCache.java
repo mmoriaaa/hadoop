@@ -196,7 +196,12 @@ public class FsDatasetCache {
         if(cachePath != null) {
           File file = new File(cachePath);
           long length = file.length();
-          MappableBlock mappableBlock = new PmemMappedBlock(length, key);
+          if(cacheLoader instanceof NativePmemMappableBlockLoader) {
+            NativePmemMappedBlock mappableBlock = new NativePmemMappedBlock(region.getAddress(),
+                region.getLength(), key);
+          } else {
+            MappableBlock mappableBlock = new PmemMappedBlock(length, key);
+          }
           mappableBlockMap.put(key, new Value(mappableBlock, State.CACHED));
           numBlocksCached.addAndGet(1);
           dataset.datanode.getMetrics().incrBlocksCached(1);
