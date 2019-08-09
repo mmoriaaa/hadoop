@@ -40,14 +40,14 @@ public class PmemMappableBlockLoader extends MappableBlockLoader {
   private static final Logger LOG =
       LoggerFactory.getLogger(PmemMappableBlockLoader.class);
   private PmemVolumeManager pmemVolumeManager;
-  private static boolean persistentEnabled;
+  private static boolean persistCacheEnabled;
 
   @Override
   CacheStats initialize(DNConf dnConf) throws IOException {
     LOG.info("Initializing cache loader: " + this.getClass().getName());
     PmemVolumeManager.init(dnConf.getPmemVolumes(), dnConf);
     pmemVolumeManager = PmemVolumeManager.getInstance();
-    PmemMappableBlockLoader.persistentEnabled = dnConf.getPersistentEnabled();
+    PmemMappableBlockLoader.persistCacheEnabled = dnConf.getPersistCacheEnabled();
     // The configuration for max locked memory is shaded.
     LOG.info("Persistent memory is used for caching data instead of " +
         "DRAM. Max locked memory is set to zero to disable DRAM cache");
@@ -82,7 +82,6 @@ public class PmemMappableBlockLoader extends MappableBlockLoader {
       throws IOException {
     PmemMappedBlock mappableBlock = null;
     String cachePath = null;
-    String bpid =  key.getBlockPoolId();
 
     FileChannel blockChannel = null;
     RandomAccessFile cacheFile = null;
@@ -146,7 +145,7 @@ public class PmemMappableBlockLoader extends MappableBlockLoader {
 
   @Override
   void shutdown() {
-    if(!persistentEnabled) {
+    if(!persistCacheEnabled) {
       LOG.info("Clean up cache on persistent memory during shutdown.");
       PmemVolumeManager.getInstance().cleanup();
     }
