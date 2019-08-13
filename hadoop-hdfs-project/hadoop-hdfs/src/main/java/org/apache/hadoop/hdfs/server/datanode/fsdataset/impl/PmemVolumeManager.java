@@ -26,7 +26,6 @@ import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.ExtendedBlockId;
-import org.apache.hadoop.hdfs.server.datanode.DNConf;
 import org.apache.hadoop.io.nativeio.NativeIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,19 +70,15 @@ public final class PmemVolumeManager {
      *                      -1 if we failed.
      */
     long reserve(long bytesCount) {
-      if(bytesCount > 0) {
-        while (true) {
-          long cur = usedBytes.get();
-          long next = cur + bytesCount;
-          if (next > maxBytes) {
-            return -1;
-          }
-          if (usedBytes.compareAndSet(cur, next)) {
-            return next;
-          }
+      while (true) {
+        long cur = usedBytes.get();
+        long next = cur + bytesCount;
+        if (next > maxBytes) {
+          return -1;
         }
-      } else {
-        return usedBytes.get();
+        if (usedBytes.compareAndSet(cur, next)) {
+          return next;
+        }
       }
     }
 
@@ -147,10 +142,11 @@ public final class PmemVolumeManager {
     }
   }
 
-  public synchronized static void init(String[] pmemVolumesConfig, DNConf dnConf)
+  public synchronized static void init(String[] pmemVolumesConfig, boolean persistCacheEnabled)
       throws IOException {
-    persistCacheEnabled = dnConf.getPersistCacheEnabled();
-    if(persistCacheEnabled) {
+    PmemVolumeManager.persistCacheEnabled = persistCacheEnabled;
+    // For test use only.
+    if (persistCacheEnabled) {
       pmemVolumeManager = null;
     }
     if (pmemVolumeManager == null) {
@@ -234,7 +230,7 @@ public final class PmemVolumeManager {
       try {
         File pmemDir = new File(volumes[n]);
         File realPmemDir = verifyIfValidPmemVolume(pmemDir);
-        if(!persistCacheEnabled) {
+        if (!persistCacheEnabled) {
           // Clean up the cache left before, if any.
           cleanup(realPmemDir);
         }
@@ -280,17 +276,19 @@ public final class PmemVolumeManager {
   }
 
   /**
-   * Restore cache in the configured pmem volumes.
+   * Restore cache from the cached files in the configured pmem volumes.
    */
-  public void restoreCache(String bpid) throws IOException {
+  public Map<ExtendedBlockId, MappableBlock> restoreCache(String bpid, boolean isNative) throws IOException {
+    final Map<ExtendedBlockId, MappableBlock> keyToMappableBlock
+        = new ConcurrentHashMap<>();
     for (byte n = 0; n < pmemVolumes.size(); n++) {
       long maxBytes = usedBytesCounts.get(n).getMaxBytes();
       long usedBytes = 0;
       File cacheDir = new File(pmemVolumes.get(n), bpid);
       if (cacheDir.exists()) {
-        Collection<File> cachedFileList = FileUtils.listFiles(new File(cacheDir.getPath()),
+        Collection<File> cachedFileList = FileUtils.listFiles(cacheDir,
             TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE);
-        //Scan the cached files in pmem volumes for cache restore.
+        // Scan the cached files in pmem volumes for cache restore.
         for (File cachedFile : cachedFileList) {
           usedBytes += cachedFile.length();
           String[] bid = cachedFile.getName().split("-");
@@ -299,16 +297,20 @@ public final class PmemVolumeManager {
           if (blockPoolId.equals(bpid)) {
             ExtendedBlockId key = new ExtendedBlockId(Long.parseLong(blockId), bpid);
             blockKeyToVolume.put(key, n);
+            if (!isNative) {
+              keyToMappableBlock.put(key, new PmemMappedBlock(cachedFile.length(), key));
+            }
           } else {
             throw new IOException("Illegal cache file name, it should be named by BlockPoolId-BlockId");
           }
         }
-        //Update maxBytes and cache capacity according to cache space used by restored cached files.
+        // Update maxBytes and cache capacity according to cache space used by restored cached files.
         usedBytesCounts.get(n).setMaxBytes(maxBytes + usedBytes);
         cacheCapacity += usedBytes;
         usedBytesCounts.get(n).reserve(usedBytes);
       }
     }
+    return keyToMappableBlock;
   }
 
   @VisibleForTesting
@@ -362,6 +364,18 @@ public final class PmemVolumeManager {
           LOG.warn("Failed to delete test file " + testFilePath +
               " from persistent memory", e);
         }
+      }
+    }
+  }
+
+  /**
+   * Create cache subdirectory specified with blockPoolId.
+   */
+  public void createBlockPoolDir(String bpid) throws IOException {
+    for (String volume : pmemVolumes) {
+      File cacheDir = new File(volume, bpid);
+      if (!cacheDir.exists() && !cacheDir.mkdir()) {
+        throw new IOException("Failed to create " + cacheDir.getPath());
       }
     }
   }

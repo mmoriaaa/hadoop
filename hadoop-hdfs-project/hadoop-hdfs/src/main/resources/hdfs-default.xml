@@ -2581,7 +2581,7 @@
   <value>false</value>
   <description>
     This value specifies whether persistent cache is enabled. This configuration is
-    valid only if the pmem persistent cache is enabled.
+    valid only if persistent memory cache is enabled.
   </description>
 </property>
 

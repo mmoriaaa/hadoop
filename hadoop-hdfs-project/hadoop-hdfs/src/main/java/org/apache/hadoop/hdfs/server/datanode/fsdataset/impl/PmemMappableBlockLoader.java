@@ -45,7 +45,7 @@ public class PmemMappableBlockLoader extends MappableBlockLoader {
   @Override
   CacheStats initialize(DNConf dnConf) throws IOException {
     LOG.info("Initializing cache loader: " + this.getClass().getName());
-    PmemVolumeManager.init(dnConf.getPmemVolumes(), dnConf);
+    PmemVolumeManager.init(dnConf.getPmemVolumes(), dnConf.getPersistCacheEnabled());
     pmemVolumeManager = PmemVolumeManager.getInstance();
     PmemMappableBlockLoader.persistCacheEnabled = dnConf.getPersistCacheEnabled();
     // The configuration for max locked memory is shaded.
@@ -145,7 +145,7 @@ public class PmemMappableBlockLoader extends MappableBlockLoader {
 
   @Override
   void shutdown() {
-    if(!persistCacheEnabled) {
+    if (!persistCacheEnabled) {
       LOG.info("Clean up cache on persistent memory during shutdown.");
       PmemVolumeManager.getInstance().cleanup();
     }

@@ -2847,18 +2847,11 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
     if (volumeExceptions.hasExceptions()) {
       throw volumeExceptions;
     }
-
-    if(!blockPoolId.isEmpty()) {
+    // For test use only.
+    if (!blockPoolId.isEmpty()) {
       bpid = blockPoolId;
     }
-    ArrayList<String> pmemVolumes = PmemVolumeManager.getInstance().getVolumes();
-    for (String volume : pmemVolumes) {
-      File cacheDir = new File(volume, bpid);
-      if (!cacheDir.exists() && !cacheDir.mkdir()) {
-        throw new IOException("Failed to create " + cacheDir.getPath());
-      }
-    }
-    cacheManager.restoreCache(bpid);
+    cacheManager.initCache(bpid);
   }
 
   @VisibleForTesting
