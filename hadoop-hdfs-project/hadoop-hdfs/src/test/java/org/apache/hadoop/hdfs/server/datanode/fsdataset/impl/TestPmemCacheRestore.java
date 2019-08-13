@@ -251,7 +251,7 @@ public class TestPmemCacheRestore {
     assertTrue(blockKeyToVolume.keySet().containsAll(blockKeys));
     // Test each replica's cache file path
     for (ExtendedBlockId key : blockKeys) {
-      if(bpid.isEmpty()) {
+      if (bpid.isEmpty()) {
         bpid = key.getBlockPoolId();
       }
       String cachePath = cacheManager.
@@ -272,7 +272,7 @@ public class TestPmemCacheRestore {
       }
     }
 
-    //Trigger cache restore
+    // Trigger cache restore
     shutdownCluster();
     restartCluster();
 

@@ -186,22 +186,24 @@ public class FsDatasetCache {
     this.memCacheStats = cacheLoader.initialize(this.getDnConf());
   }
 
-  public void restoreCache(String bpid) throws IOException {
-    if(!cacheLoader.isTransientCache() && getDnConf().getPersistCacheEnabled()) {
-      PmemVolumeManager.getInstance().restoreCache(bpid);
-      Map<ExtendedBlockId, Byte> blockKeyToVolume =
-          PmemVolumeManager.getInstance().getBlockKeyToVolume();
-      for(ExtendedBlockId key : blockKeyToVolume.keySet()) {
-        String cachePath = PmemVolumeManager.getInstance().getCachePath(key);
-        if(cachePath != null) {
-          File file = new File(cachePath);
-          long length = file.length();
-          MappableBlock mappableBlock = new PmemMappedBlock(length, key);
-          mappableBlockMap.put(key, new Value(mappableBlock, State.CACHED));
-          numBlocksCached.addAndGet(1);
-          dataset.datanode.getMetrics().incrBlocksCached(1);
-          LOG.info("Restored the persistent cache for block [key=" + key + "]!");
-        }
+  /**
+   * For persistent memory cache, create cache subdirectory specified with
+   * blockPoolId to store cached files.
+   * Restore cache from the cached files in persistent memory volumes.
+   */
+  public void initCache(String bpid) throws IOException {
+    if (cacheLoader.isTransientCache()) {
+      return;
+    }
+    PmemVolumeManager.getInstance().createBlockPoolDir(bpid);
+    if (getDnConf().getPersistCacheEnabled()) {
+      final Map<ExtendedBlockId, MappableBlock> keyToMappableBlock = PmemVolumeManager.
+          getInstance().restoreCache(bpid, cacheLoader instanceof NativePmemMappableBlockLoader);
+      for (ExtendedBlockId key : keyToMappableBlock.keySet()) {
+        mappableBlockMap.put(key, new Value(keyToMappableBlock.get(key), State.CACHED));
+        numBlocksCached.addAndGet(1);
+        dataset.datanode.getMetrics().incrBlocksCached(1);
+        LOG.info("Restored the persistent cache for block [key=" + key + "]!");
       }
     }
   }
