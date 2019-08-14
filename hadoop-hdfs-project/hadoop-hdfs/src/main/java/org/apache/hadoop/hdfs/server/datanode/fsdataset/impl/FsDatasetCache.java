@@ -26,7 +26,6 @@ import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_CACHE_REVOCATION
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -197,13 +196,25 @@ public class FsDatasetCache {
     }
     PmemVolumeManager.getInstance().createBlockPoolDir(bpid);
     if (getDnConf().getPersistCacheEnabled()) {
-      final Map<ExtendedBlockId, MappableBlock> keyToMappableBlock = PmemVolumeManager.
-          getInstance().restoreCache(bpid, cacheLoader instanceof NativePmemMappableBlockLoader);
+      final Map<ExtendedBlockId, MappableBlock> keyToMappableBlock =
+          PmemVolumeManager.getInstance().restoreCache(
+              bpid, cacheLoader instanceof NativePmemMappableBlockLoader);
       for (ExtendedBlockId key : keyToMappableBlock.keySet()) {
-        mappableBlockMap.put(key, new Value(keyToMappableBlock.get(key), State.CACHED));
+        mappableBlockMap.put(key, new Value(keyToMappableBlock.get(key),
+            State.CACHED));
         numBlocksCached.addAndGet(1);
         dataset.datanode.getMetrics().incrBlocksCached(1);
-        LOG.info("Restored the persistent cache for block [key=" + key + "]!");
+
+        String path = PmemVolumeManager.getInstance().getCachePath(key);
+        long addr = keyToMappableBlock.get(key).getAddress();
+        long length = keyToMappableBlock.get(key).getLength();
+        if (addr == -1) {
+          LOG.info("Successfully restored the persistent cache for block {}, " +
+              "path = {}, length = {}", key, path, length);
+        } else {
+          LOG.info("Successfully restored the persistent cache for block {}, " +
+              "path = {}, address = {}, length = {}", key, path, addr, length);
+        }
       }
     }
   }

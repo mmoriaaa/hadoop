@@ -82,7 +82,7 @@ public class TestPmemCacheRestore {
   private static DistributedFileSystem fs;
   private static DataNode dn;
   private static FsDatasetCache cacheManager;
-  private static String bpid = "";
+  private static String blockPoolId = "";
   /**
    * Used to pause DN BPServiceActor threads. BPSA threads acquire the
    * shared read lock. The test acquires the write lock for exclusive access.
@@ -179,7 +179,7 @@ public class TestPmemCacheRestore {
     prevCacheManipulator = NativeIO.POSIX.getCacheManipulator();
     NativeIO.POSIX.setCacheManipulator(new NoMlockCacheManipulator());
 
-    FsDatasetImpl.setBlockPoolId(bpid);
+    FsDatasetImpl.setBlockPoolId(blockPoolId);
     cluster = new MiniDFSCluster.Builder(conf)
         .numDataNodes(1).build();
     cluster.waitActive();
@@ -251,8 +251,8 @@ public class TestPmemCacheRestore {
     assertTrue(blockKeyToVolume.keySet().containsAll(blockKeys));
     // Test each replica's cache file path
     for (ExtendedBlockId key : blockKeys) {
-      if (bpid.isEmpty()) {
-        bpid = key.getBlockPoolId();
+      if (blockPoolId.isEmpty()) {
+        blockPoolId = key.getBlockPoolId();
       }
       String cachePath = cacheManager.
           getReplicaCachePath(key.getBlockPoolId(), key.getBlockId());
@@ -263,10 +263,12 @@ public class TestPmemCacheRestore {
           PmemVolumeManager.getInstance().getCacheFileName(key);
       if (cachePath.startsWith(PMEM_DIR_0)) {
         assertTrue(cachePath.equals(PmemVolumeManager
-            .getRealPmemDir(PMEM_DIR_0) + "/" + key.getBlockPoolId() + "/" + expectFileName));
+            .getRealPmemDir(PMEM_DIR_0) + "/" + key.getBlockPoolId() +
+            "/" + expectFileName));
       } else if (cachePath.startsWith(PMEM_DIR_1)) {
         assertTrue(cachePath.equals(PmemVolumeManager
-            .getRealPmemDir(PMEM_DIR_1) + "/" + key.getBlockPoolId() + "/" + expectFileName));
+            .getRealPmemDir(PMEM_DIR_1) + "/" + key.getBlockPoolId() +
+            "/" + expectFileName));
       } else {
         fail("The cache path is not the expected one: " + cachePath);
       }
@@ -292,10 +294,12 @@ public class TestPmemCacheRestore {
           PmemVolumeManager.getInstance().getCacheFileName(key);
       if (cachePath.startsWith(PMEM_DIR_0)) {
         assertTrue(cachePath.equals(PmemVolumeManager
-            .getRealPmemDir(PMEM_DIR_0) + "/" + key.getBlockPoolId() + "/" + expectFileName));
+            .getRealPmemDir(PMEM_DIR_0) + "/" + key.getBlockPoolId() +
+            "/" + expectFileName));
       } else if (cachePath.startsWith(PMEM_DIR_1)) {
         assertTrue(cachePath.equals(PmemVolumeManager
-            .getRealPmemDir(PMEM_DIR_1) + "/" + key.getBlockPoolId() + "/" + expectFileName));
+            .getRealPmemDir(PMEM_DIR_1) + "/" + key.getBlockPoolId() +
+            "/" + expectFileName));
       } else {
         fail("The cache path is not the expected one: " + cachePath);
       }

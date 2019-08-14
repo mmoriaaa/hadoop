@@ -95,7 +95,7 @@ public class DNConf {
   final boolean encryptDataTransfer;
   final boolean connectToDnViaHostname;
   final boolean overwriteDownstreamDerivedQOP;
-  final boolean persistCacheEnabled;
+  private final boolean persistCacheEnabled;
 
   final long readaheadLength;
   final long heartBeatInterval;
@@ -289,7 +289,8 @@ public class DNConf {
         getConf().getTrimmedStrings(DFSConfigKeys.DFS_DATANODE_DATA_DIR_KEY);
     this.volsConfigured = (dataDirs == null) ? 0 : dataDirs.length;
 
-    this.persistCacheEnabled = getConf().getBoolean(DFS_DATANODE_CACHE_PERSISTENCE_ENABLED_KEY,
+    this.persistCacheEnabled = getConf().getBoolean(
+        DFS_DATANODE_CACHE_PERSISTENCE_ENABLED_KEY,
         DFS_DATANODE_CACHE_PERSISTENCE_ENABLED_DEFAULT);
   }
 
@@ -300,7 +301,7 @@ public class DNConf {
   
   /**
    * Returns the configuration.
-   * 
+   *
    * @return Configuration the configuration
    */
   public Configuration getConf() {

@@ -3386,8 +3386,8 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
 
   void stopAllDataxceiverThreads(FsVolumeImpl volume) {
     try (AutoCloseableLock lock = datasetLock.acquire()) {
-      for (String blockPoolId : volumeMap.getBlockPoolList()) {
-        Collection<ReplicaInfo> replicas = volumeMap.replicas(blockPoolId);
+      for (String bpid : volumeMap.getBlockPoolList()) {
+        Collection<ReplicaInfo> replicas = volumeMap.replicas(bpid);
         for (ReplicaInfo replicaInfo : replicas) {
           if ((replicaInfo.getState() == ReplicaState.TEMPORARY
               || replicaInfo.getState() == ReplicaState.RBW)

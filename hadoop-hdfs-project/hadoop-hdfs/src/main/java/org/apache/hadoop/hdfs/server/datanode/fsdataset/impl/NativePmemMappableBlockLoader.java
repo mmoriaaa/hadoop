@@ -91,7 +91,7 @@ public class NativePmemMappableBlockLoader extends PmemMappableBlockLoader {
 
       assert NativeIO.isAvailable();
       filePath = PmemVolumeManager.getInstance().getCachePath(key);
-      region = POSIX.Pmem.mapBlock(filePath, length);
+      region = POSIX.Pmem.mapBlock(filePath, length, false);
       if (region == null) {
         throw new IOException("Failed to map the block " + blockFileName +
             " to persistent storage.");
