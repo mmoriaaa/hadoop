@@ -281,10 +281,10 @@ public final class PmemVolumeManager {
   public Map<ExtendedBlockId, MappableBlock> restoreCache(String bpid, boolean isNative) throws IOException {
     final Map<ExtendedBlockId, MappableBlock> keyToMappableBlock
         = new ConcurrentHashMap<>();
-    for (byte n = 0; n < pmemVolumes.size(); n++) {
-      long maxBytes = usedBytesCounts.get(n).getMaxBytes();
+    for (byte volumeIndex = 0; volumeIndex < pmemVolumes.size(); volumeIndex++) {
+      long maxBytes = usedBytesCounts.get(volumeIndex).getMaxBytes();
       long usedBytes = 0;
-      File cacheDir = new File(pmemVolumes.get(n), bpid);
+      File cacheDir = new File(pmemVolumes.get(volumeIndex), bpid);
       if (cacheDir.exists()) {
         Collection<File> cachedFileList = FileUtils.listFiles(cacheDir,
             TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE);
@@ -294,20 +294,28 @@ public final class PmemVolumeManager {
           String[] bid = cachedFile.getName().split("-");
           String blockId = bid[bid.length - 1];
           String blockPoolId = cachedFile.getName().replace("-" + blockId, "");
-          if (blockPoolId.equals(bpid)) {
-            ExtendedBlockId key = new ExtendedBlockId(Long.parseLong(blockId), bpid);
-            blockKeyToVolume.put(key, n);
-            if (!isNative) {
-              keyToMappableBlock.put(key, new PmemMappedBlock(cachedFile.length(), key));
-            }
-          } else {
+          if (!blockPoolId.equals(bpid)) {
             throw new IOException("Illegal cache file name, it should be named by BlockPoolId-BlockId");
+          }
+          ExtendedBlockId key = new ExtendedBlockId(Long.parseLong(blockId), bpid);
+          blockKeyToVolume.put(key, volumeIndex);
+          if (!isNative) {
+            keyToMappableBlock.put(key, new PmemMappedBlock(cachedFile.length(), key));
+          } else {
+            NativeIO.POSIX.PmemMappedRegion region = NativeIO.POSIX.Pmem.mapBlock(
+                cachedFile.getAbsolutePath(), cachedFile.length());
+            if (region == null) {
+              throw new IOException("Failed to restore the block " + cachedFile.getName() +
+                  " in persistent storage.");
+            }
+            keyToMappableBlock.put(key,
+                new NativePmemMappedBlock(region.getAddress(), region.getLength(), key));
           }
         }
         // Update maxBytes and cache capacity according to cache space used by restored cached files.
-        usedBytesCounts.get(n).setMaxBytes(maxBytes + usedBytes);
+        usedBytesCounts.get(volumeIndex).setMaxBytes(maxBytes + usedBytes);
         cacheCapacity += usedBytes;
-        usedBytesCounts.get(n).reserve(usedBytes);
+        usedBytesCounts.get(volumeIndex).reserve(usedBytes);
       }
     }
     return keyToMappableBlock;
