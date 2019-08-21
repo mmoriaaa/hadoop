@@ -262,13 +262,13 @@ public class TestCacheByPmemMappableBlockLoader {
       String expectFileName =
           PmemVolumeManager.getInstance().getCacheFileName(key);
       if (cachePath.startsWith(PMEM_DIR_0)) {
-        assertTrue(cachePath.equals(PmemVolumeManager.
-            getRealPmemDir(PMEM_DIR_0) + "/" + key.getBlockPoolId()
-            + "/" + expectFileName));
-      } else if (cachePath.startsWith(PMEM_DIR_1)) {
         assertTrue(cachePath.equals(PmemVolumeManager
-            .getRealPmemDir(PMEM_DIR_1) + "/" + key.getBlockPoolId()
-            + "/" + expectFileName));
+            .getRealPmemDir(PMEM_DIR_0) + "/" + key.getBlockPoolId() +
+            "/" + expectFileName));
+      } else if (cachePath.startsWith(PMEM_DIR_1)) {
+        assertTrue(cachePath.equals(PmemVolumeManager.
+            getRealPmemDir(PMEM_DIR_1) + "/" + key.getBlockPoolId() +
+            "/" + expectFileName));
       } else {
         fail("The cache path is not the expected one: " + cachePath);
       }

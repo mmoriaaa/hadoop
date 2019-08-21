@@ -18,6 +18,7 @@
 
 package org.apache.hadoop.hdfs.server.datanode.fsdataset.impl;
 
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.SERVICE_SHUTDOWN_TIMEOUT;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_CACHE_REVOCATION_TIMEOUT_MS;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_CACHE_REVOCATION_TIMEOUT_MS_DEFAULT;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_CACHE_REVOCATION_POLLING_MS;
@@ -35,6 +36,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
@@ -199,21 +201,26 @@ public class FsDatasetCache {
       final Map<ExtendedBlockId, MappableBlock> keyToMappableBlock =
           PmemVolumeManager.getInstance().restoreCache(
               bpid, cacheLoader instanceof NativePmemMappableBlockLoader);
-      for (ExtendedBlockId key : keyToMappableBlock.keySet()) {
-        mappableBlockMap.put(key, new Value(keyToMappableBlock.get(key),
-            State.CACHED));
+
+      Set<Map.Entry<ExtendedBlockId, MappableBlock>> entrySet
+          = keyToMappableBlock.entrySet();
+      for (Map.Entry<ExtendedBlockId, MappableBlock> entry : entrySet) {
+        mappableBlockMap.put(entry.getKey(),
+            new Value(keyToMappableBlock.get(entry.getKey()), State.CACHED));
         numBlocksCached.addAndGet(1);
         dataset.datanode.getMetrics().incrBlocksCached(1);
 
-        String path = PmemVolumeManager.getInstance().getCachePath(key);
-        long addr = keyToMappableBlock.get(key).getAddress();
-        long length = keyToMappableBlock.get(key).getLength();
+        String path = PmemVolumeManager.getInstance()
+            .getCachePath(entry.getKey());
+        long addr = keyToMappableBlock.get(entry.getKey()).getAddress();
+        long length = keyToMappableBlock.get(entry.getKey()).getLength();
         if (addr == -1) {
           LOG.info("Successfully restored the persistent cache for block {}, " +
-              "path = {}, length = {}", key, path, length);
+              "path = {}, length = {}", entry.getKey(), path, length);
         } else {
           LOG.info("Successfully restored the persistent cache for block {}, " +
-              "path = {}, address = {}, length = {}", key, path, addr, length);
+              "path = {}, address = {}, length = {}", entry.getKey(), path,
+              addr, length);
         }
       }
     }

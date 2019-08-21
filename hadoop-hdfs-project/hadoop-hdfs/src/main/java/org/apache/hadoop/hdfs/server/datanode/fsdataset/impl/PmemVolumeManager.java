@@ -298,7 +298,8 @@ public final class PmemVolumeManager {
           usedBytes += cachedFile.length();
           String[] bid = cachedFile.getName().split("-");
           String blockId = bid[bid.length - 1];
-          String blockPoolId = cachedFile.getName().replace("-" + blockId, "");
+          String blockPoolId = cachedFile.getName()
+              .replace("-" + blockId, "");
           if (!blockPoolId.equals(bpid)) {
             throw new IOException("Illegal cache file name, " +
                 "it should be named by BlockPoolId-BlockId");
@@ -317,8 +318,7 @@ public final class PmemVolumeManager {
               throw new IOException("Failed to restore the block "
                   + cachedFile.getName() + " in persistent storage.");
             }
-            keyToMappableBlock.put(key,
-                new NativePmemMappedBlock(
+            keyToMappableBlock.put(key, new NativePmemMappedBlock(
                     region.getAddress(), region.getLength(), key));
           }
         }

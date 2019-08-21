@@ -126,12 +126,13 @@ public class TestPmemCacheRestore {
   public void setUp() throws Exception {
     conf = new HdfsConfiguration();
     conf.setBoolean(DFS_DATANODE_CACHE_PERSISTENCE_ENABLED_KEY, true);
-    conf.setLong(
-        DFSConfigKeys.DFS_NAMENODE_PATH_BASED_CACHE_REFRESH_INTERVAL_MS, 100);
+    conf.setLong(DFSConfigKeys.
+        DFS_NAMENODE_PATH_BASED_CACHE_REFRESH_INTERVAL_MS, 100);
     conf.setLong(DFSConfigKeys.DFS_CACHEREPORT_INTERVAL_MSEC_KEY, 500);
     conf.setLong(DFSConfigKeys.DFS_BLOCK_SIZE_KEY, BLOCK_SIZE);
     conf.setLong(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 1);
-    conf.setInt(DFS_DATANODE_FSDATASETCACHE_MAX_THREADS_PER_VOLUME_KEY, 10);
+    conf.setInt(
+        DFS_DATANODE_FSDATASETCACHE_MAX_THREADS_PER_VOLUME_KEY, 10);
 
     // Configuration for pmem cache
     new File(PMEM_DIR_0).getAbsoluteFile().mkdir();
@@ -167,12 +168,13 @@ public class TestPmemCacheRestore {
   protected static void restartCluster() throws Exception {
     conf = new HdfsConfiguration();
     conf.setBoolean(DFS_DATANODE_CACHE_PERSISTENCE_ENABLED_KEY, true);
-    conf.setLong(
-        DFSConfigKeys.DFS_NAMENODE_PATH_BASED_CACHE_REFRESH_INTERVAL_MS, 100);
+    conf.setLong(DFSConfigKeys.
+        DFS_NAMENODE_PATH_BASED_CACHE_REFRESH_INTERVAL_MS, 100);
     conf.setLong(DFSConfigKeys.DFS_CACHEREPORT_INTERVAL_MSEC_KEY, 500);
     conf.setLong(DFSConfigKeys.DFS_BLOCK_SIZE_KEY, BLOCK_SIZE);
     conf.setLong(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 1);
-    conf.setInt(DFS_DATANODE_FSDATASETCACHE_MAX_THREADS_PER_VOLUME_KEY, 10);
+    conf.setInt(
+        DFS_DATANODE_FSDATASETCACHE_MAX_THREADS_PER_VOLUME_KEY, 10);
     // Configure two bogus pmem volumes
     conf.set(DFS_DATANODE_CACHE_PMEM_DIRS_KEY, PMEM_DIR_0 + "," + PMEM_DIR_1);
 
@@ -199,8 +201,8 @@ public class TestPmemCacheRestore {
   public List<ExtendedBlockId> getExtendedBlockId(Path filePath, long fileLen)
       throws IOException {
     List<ExtendedBlockId> keys = new ArrayList<>();
-    HdfsBlockLocation[] locs =
-        (HdfsBlockLocation[]) fs.getFileBlockLocations(filePath, 0, fileLen);
+    HdfsBlockLocation[] locs = (HdfsBlockLocation[]) fs.getFileBlockLocations(
+        filePath, 0, fileLen);
     for (HdfsBlockLocation loc : locs) {
       long bkid = loc.getLocatedBlock().getBlock().getBlockId();
       String bpid = loc.getLocatedBlock().getBlock().getBlockPoolId();
