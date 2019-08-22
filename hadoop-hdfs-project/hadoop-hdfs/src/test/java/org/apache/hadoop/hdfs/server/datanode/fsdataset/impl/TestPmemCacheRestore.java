@@ -196,6 +196,7 @@ public class TestPmemCacheRestore {
       cluster.shutdown();
       cluster = null;
     }
+    PmemVolumeManager.reset();
   }
 
   public List<ExtendedBlockId> getExtendedBlockId(Path filePath, long fileLen)

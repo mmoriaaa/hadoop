@@ -147,10 +147,6 @@ public final class PmemVolumeManager {
   public synchronized static void init(
       String[] pmemVolumesConfig, boolean persistCacheEnabled)
       throws IOException {
-    // For test use only.
-    if (persistCacheEnabled) {
-      pmemVolumeManager = null;
-    }
     if (pmemVolumeManager == null) {
       pmemVolumeManager = new PmemVolumeManager(pmemVolumesConfig,
           persistCacheEnabled);
@@ -163,6 +159,11 @@ public final class PmemVolumeManager {
           "The pmemVolumeManager should be instantiated!");
     }
     return pmemVolumeManager;
+  }
+
+  @VisibleForTesting
+  public static void reset() {
+    pmemVolumeManager = null;
   }
 
   @VisibleForTesting
