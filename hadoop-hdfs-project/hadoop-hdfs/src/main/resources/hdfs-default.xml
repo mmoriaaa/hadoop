@@ -2577,10 +2577,10 @@
 
 <property>
   <name>dfs.datanode.cache.persistence.enabled</name>
-  <value>false</value>
+  <value>true</value>
   <description>
-    This value specifies whether persistent cache is enabled. This configuration is
-    valid only if persistent memory cache is enabled.
+    This value specifies whether persistent cache is enabled. This configuration
+    is valid only if persistent memory cache is enabled.
   </description>
 </property>
 

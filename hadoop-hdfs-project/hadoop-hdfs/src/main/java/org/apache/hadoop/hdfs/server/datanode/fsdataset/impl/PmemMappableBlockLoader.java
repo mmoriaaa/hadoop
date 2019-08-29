@@ -26,6 +26,7 @@ import org.apache.hadoop.hdfs.server.datanode.DNConf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -142,6 +143,25 @@ public class PmemMappableBlockLoader extends MappableBlockLoader {
   @Override
   public boolean isNativeLoader() {
     return false;
+  }
+
+  @Override
+  public MappableBlock getRestoredMappableBlock(File cacheFile, String bpid)
+      throws IOException {
+    ExtendedBlockId key = new ExtendedBlockId(getBlockId(cacheFile), bpid);
+    MappableBlock mappableBlock = new PmemMappedBlock(cacheFile.length(), key);
+    String path = PmemVolumeManager.getInstance().getCachePath(key);
+    long length = mappableBlock.getLength();
+    LOG.info("Restoring the persistent cache for block {}, " +
+        "path = {}, length = {}", key, path, length);
+    return mappableBlock;
+  }
+
+  /**
+   * Parse the file name and get the BlockId.
+   */
+  public long getBlockId(File file) {
+    return Long.parseLong(file.getName());
   }
 
   @Override

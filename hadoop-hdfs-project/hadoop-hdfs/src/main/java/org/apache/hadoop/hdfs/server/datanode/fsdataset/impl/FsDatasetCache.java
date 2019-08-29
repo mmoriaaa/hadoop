@@ -198,9 +198,7 @@ public class FsDatasetCache {
     PmemVolumeManager.getInstance().createBlockPoolDir(bpid);
     if (getDnConf().getPersistCacheEnabled()) {
       final Map<ExtendedBlockId, MappableBlock> keyToMappableBlock =
-          PmemVolumeManager.getInstance().restoreCache(
-              bpid, cacheLoader instanceof NativePmemMappableBlockLoader);
-
+          PmemVolumeManager.getInstance().restoreCache(bpid, cacheLoader);
       Set<Map.Entry<ExtendedBlockId, MappableBlock>> entrySet
           = keyToMappableBlock.entrySet();
       for (Map.Entry<ExtendedBlockId, MappableBlock> entry : entrySet) {
@@ -208,19 +206,6 @@ public class FsDatasetCache {
             new Value(keyToMappableBlock.get(entry.getKey()), State.CACHED));
         numBlocksCached.addAndGet(1);
         dataset.datanode.getMetrics().incrBlocksCached(1);
-
-        String path = PmemVolumeManager.getInstance()
-            .getCachePath(entry.getKey());
-        long addr = keyToMappableBlock.get(entry.getKey()).getAddress();
-        long length = keyToMappableBlock.get(entry.getKey()).getLength();
-        if (addr == -1) {
-          LOG.info("Successfully restored the persistent cache for block {}, " +
-              "path = {}, length = {}", entry.getKey(), path, length);
-        } else {
-          LOG.info("Successfully restored the persistent cache for block {}, " +
-              "path = {}, address = {}, length = {}", entry.getKey(), path,
-              addr, length);
-        }
       }
     }
   }

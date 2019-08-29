@@ -283,7 +283,7 @@ public final class PmemVolumeManager {
    * Restore cache from the cached files in the configured pmem volumes.
    */
   public Map<ExtendedBlockId, MappableBlock> restoreCache(
-      String bpid, boolean isNative) throws IOException {
+      String bpid, MappableBlockLoader cacheLoader) throws IOException {
     final Map<ExtendedBlockId, MappableBlock> keyToMappableBlock
         = new ConcurrentHashMap<>();
     for (byte volumeIndex = 0; volumeIndex < pmemVolumes.size();
@@ -291,44 +291,22 @@ public final class PmemVolumeManager {
       long maxBytes = usedBytesCounts.get(volumeIndex).getMaxBytes();
       long usedBytes = 0;
       File cacheDir = new File(pmemVolumes.get(volumeIndex), bpid);
-      if (cacheDir.exists()) {
-        Collection<File> cachedFileList = FileUtils.listFiles(cacheDir,
-            TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE);
-        // Scan the cached files in pmem volumes for cache restore.
-        for (File cachedFile : cachedFileList) {
-          usedBytes += cachedFile.length();
-          String[] bid = cachedFile.getName().split("-");
-          String blockId = bid[bid.length - 1];
-          String blockPoolId = cachedFile.getName()
-              .replace("-" + blockId, "");
-          if (!blockPoolId.equals(bpid)) {
-            throw new IOException("Illegal cache file name, " +
-                "it should be named by BlockPoolId-BlockId");
-          }
-          ExtendedBlockId key = new ExtendedBlockId(
-              Long.parseLong(blockId), bpid);
-          blockKeyToVolume.put(key, volumeIndex);
-          if (!isNative) {
-            keyToMappableBlock.put(key, new PmemMappedBlock(
-                cachedFile.length(), key));
-          } else {
-            NativeIO.POSIX.PmemMappedRegion region =
-                NativeIO.POSIX.Pmem.mapBlock(cachedFile.getAbsolutePath(),
-                    cachedFile.length(), true);
-            if (region == null) {
-              throw new IOException("Failed to restore the block "
-                  + cachedFile.getName() + " in persistent storage.");
-            }
-            keyToMappableBlock.put(key, new NativePmemMappedBlock(
-                    region.getAddress(), region.getLength(), key));
-          }
-        }
-        // Update maxBytes and cache capacity according to cache space
-        // used by restored cached files.
-        usedBytesCounts.get(volumeIndex).setMaxBytes(maxBytes + usedBytes);
-        cacheCapacity += usedBytes;
-        usedBytesCounts.get(volumeIndex).reserve(usedBytes);
+      Collection<File> cachedFileList = FileUtils.listFiles(cacheDir,
+          TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE);
+      // Scan the cached files in pmem volumes for cache restore.
+      for (File cachedFile : cachedFileList) {
+        MappableBlock mappableBlock = cacheLoader.
+            getRestoredMappableBlock(cachedFile, bpid);
+        ExtendedBlockId key = mappableBlock.getKey();
+        blockKeyToVolume.put(key, volumeIndex);
+        keyToMappableBlock.put(key, mappableBlock);
+        usedBytes += cachedFile.length();
       }
+      // Update maxBytes and cache capacity according to cache space
+      // used by restored cached files.
+      usedBytesCounts.get(volumeIndex).setMaxBytes(maxBytes + usedBytes);
+      cacheCapacity += usedBytes;
+      usedBytesCounts.get(volumeIndex).reserve(usedBytes);
     }
     return keyToMappableBlock;
   }
@@ -444,11 +422,11 @@ public final class PmemVolumeManager {
   }
 
   /**
-   * The cache file is named as BlockPoolId-BlockId.
-   * So its name can be inferred by BlockPoolId and BlockId.
+   * A cache file is named after the corresponding BlockId.
+   * Thus, cache file name can be inferred according to BlockId.
    */
-  public String getCacheFileName(ExtendedBlockId key) {
-    return key.getBlockPoolId() + "-" + key.getBlockId();
+  public String setAndGetFileName(ExtendedBlockId key) {
+    return String.valueOf(key.getBlockId());
   }
 
   /**
@@ -467,11 +445,11 @@ public final class PmemVolumeManager {
   public String inferCacheFilePath(Byte volumeIndex, ExtendedBlockId key) {
     String bpid = key.getBlockPoolId();
     return pmemVolumes.get(volumeIndex) + "/" + bpid +
-        "/" + getCacheFileName(key);
+        "/" + setAndGetFileName(key);
   }
 
   /**
-   * The cache file path is pmemVolume/BlockPoolId/BlockPoolId-BlockId.
+   * The cache file path is pmemVolume/BlockPoolId/BlockId.
    */
   public String getCachePath(ExtendedBlockId key) {
     Byte volumeIndex = blockKeyToVolume.get(key);

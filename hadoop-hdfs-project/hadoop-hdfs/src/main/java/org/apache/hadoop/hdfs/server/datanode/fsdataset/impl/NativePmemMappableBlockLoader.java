@@ -33,6 +33,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.BufferedInputStream;
 import java.io.DataInputStream;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -188,5 +189,25 @@ public class NativePmemMappableBlockLoader extends PmemMappableBlockLoader {
   @Override
   public boolean isNativeLoader() {
     return true;
+  }
+
+  @Override
+  public MappableBlock getRestoredMappableBlock(File cacheFile, String bpid)
+      throws IOException {
+    NativeIO.POSIX.PmemMappedRegion region =
+        NativeIO.POSIX.Pmem.mapBlock(cacheFile.getAbsolutePath(),
+            cacheFile.length(), true);
+    if (region == null)
+      throw new IOException("Failed to restore the block "
+          + cacheFile.getName() + " in persistent storage.");
+    ExtendedBlockId key = new ExtendedBlockId(super.getBlockId(cacheFile), bpid);
+    MappableBlock mappableBlock = new NativePmemMappedBlock(
+        region.getAddress(), region.getLength(), key);
+    String path = PmemVolumeManager.getInstance().getCachePath(key);
+    long addr = mappableBlock.getAddress();
+    long length = mappableBlock.getLength();
+    LOG.info("Restoring the persistent cache for block {}, " +
+        "path = {}, address = {}, length = {}", key, path, addr, length);
+    return mappableBlock;
   }
 }

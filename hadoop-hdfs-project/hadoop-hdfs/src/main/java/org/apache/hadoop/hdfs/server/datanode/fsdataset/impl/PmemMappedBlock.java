@@ -55,6 +55,11 @@ public class PmemMappedBlock implements MappableBlock {
   }
 
   @Override
+  public ExtendedBlockId getKey() {
+    return key;
+  }
+
+  @Override
   public void close() {
     String cacheFilePath =
         PmemVolumeManager.getInstance().getCachePath(key);

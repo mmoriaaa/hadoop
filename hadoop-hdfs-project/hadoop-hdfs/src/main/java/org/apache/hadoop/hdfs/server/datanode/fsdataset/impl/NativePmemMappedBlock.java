@@ -59,6 +59,11 @@ public class NativePmemMappedBlock implements MappableBlock {
   }
 
   @Override
+  public ExtendedBlockId getKey() {
+    return key;
+  }
+
+  @Override
   public void close() {
     if (pmemMappedAddress != -1L) {
       String cacheFilePath =

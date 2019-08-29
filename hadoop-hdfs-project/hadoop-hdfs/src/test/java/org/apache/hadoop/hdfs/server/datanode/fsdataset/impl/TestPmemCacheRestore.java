@@ -263,7 +263,7 @@ public class TestPmemCacheRestore {
       // to pmem.
       assertNotNull(cachePath);
       String expectFileName =
-          PmemVolumeManager.getInstance().getCacheFileName(key);
+          PmemVolumeManager.getInstance().setAndGetFileName(key);
       if (cachePath.startsWith(PMEM_DIR_0)) {
         assertTrue(cachePath.equals(PmemVolumeManager
             .getRealPmemDir(PMEM_DIR_0) + "/" + key.getBlockPoolId() +
@@ -294,7 +294,7 @@ public class TestPmemCacheRestore {
       // to pmem.
       assertNotNull(cachePath);
       String expectFileName =
-          PmemVolumeManager.getInstance().getCacheFileName(key);
+          PmemVolumeManager.getInstance().setAndGetFileName(key);
       if (cachePath.startsWith(PMEM_DIR_0)) {
         assertTrue(cachePath.equals(PmemVolumeManager
             .getRealPmemDir(PMEM_DIR_0) + "/" + key.getBlockPoolId() +

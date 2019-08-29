@@ -403,7 +403,7 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
   public static final String  DFS_DATANODE_CACHE_PERSISTENCE_ENABLED_KEY =
       "dfs.datanode.cache.persistence.enabled";
   public static final boolean DFS_DATANODE_CACHE_PERSISTENCE_ENABLED_DEFAULT =
-      false;
+      true;
 
   public static final String DFS_NAMENODE_DATANODE_REGISTRATION_IP_HOSTNAME_CHECK_KEY = "dfs.namenode.datanode.registration.ip-hostname-check";
   public static final boolean DFS_NAMENODE_DATANODE_REGISTRATION_IP_HOSTNAME_CHECK_DEFAULT = true;

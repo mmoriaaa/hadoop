@@ -27,6 +27,7 @@ import org.apache.hadoop.io.nativeio.NativeIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.MappedByteBuffer;
@@ -116,6 +117,12 @@ public class MemoryMappableBlockLoader extends MappableBlockLoader {
   @Override
   public boolean isTransientCache() {
     return true;
+  }
+
+  @Override
+  public MappableBlock getRestoredMappableBlock(File cacheFile, String bpid)
+      throws IOException {
+    return null;
   }
 
   @Override
