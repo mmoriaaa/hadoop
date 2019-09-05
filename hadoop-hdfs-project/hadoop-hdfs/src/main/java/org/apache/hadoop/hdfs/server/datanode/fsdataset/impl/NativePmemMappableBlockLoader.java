@@ -58,8 +58,8 @@ public class NativePmemMappableBlockLoader extends PmemMappableBlockLoader {
    *
    * Map the block and verify its checksum.
    *
-   * The block will be mapped to PmemDir/BlockPoolId-BlockId, in which PmemDir
-   * is a persistent memory volume chosen by PmemVolumeManager.
+   * The block will be mapped to PmemDir/BlockPoolId/subdir#/subdir#/BlockId,
+   * in which PmemDir is a persistent memory volume chosen by PmemVolumeManager.
    *
    * @param length         The current length of the block.
    * @param blockIn        The block input stream. Should be positioned at the
@@ -192,8 +192,8 @@ public class NativePmemMappableBlockLoader extends PmemMappableBlockLoader {
   }
 
   @Override
-  public MappableBlock getRestoredMappableBlock(File cacheFile, String bpid)
-      throws IOException {
+  public MappableBlock getRestoredMappableBlock(
+      File cacheFile, String bpid, byte volumeIndex) throws IOException {
     NativeIO.POSIX.PmemMappedRegion region =
         NativeIO.POSIX.Pmem.mapBlock(cacheFile.getAbsolutePath(),
             cacheFile.length(), true);
@@ -203,6 +203,8 @@ public class NativePmemMappableBlockLoader extends PmemMappableBlockLoader {
     ExtendedBlockId key = new ExtendedBlockId(super.getBlockId(cacheFile), bpid);
     MappableBlock mappableBlock = new NativePmemMappedBlock(
         region.getAddress(), region.getLength(), key);
+    PmemVolumeManager.getInstance().restoreblockKeyToVolume(key, volumeIndex);
+
     String path = PmemVolumeManager.getInstance().getCachePath(key);
     long addr = mappableBlock.getAddress();
     long length = mappableBlock.getLength();

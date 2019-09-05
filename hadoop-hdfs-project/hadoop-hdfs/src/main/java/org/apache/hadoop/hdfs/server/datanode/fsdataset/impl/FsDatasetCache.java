@@ -217,7 +217,7 @@ public class FsDatasetCache {
   /**
    * Get the cache path if the replica is cached into persistent memory.
    */
-  String getReplicaCachePath(String bpid, long blockId) {
+  String getReplicaCachePath(String bpid, long blockId) throws IOException {
     if (cacheLoader.isTransientCache() ||
         !isCached(bpid, blockId)) {
       return null;

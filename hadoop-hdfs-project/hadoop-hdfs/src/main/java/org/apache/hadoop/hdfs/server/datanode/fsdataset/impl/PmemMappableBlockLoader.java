@@ -63,8 +63,8 @@ public class PmemMappableBlockLoader extends MappableBlockLoader {
    *
    * Map the block and verify its checksum.
    *
-   * The block will be mapped to PmemDir/BlockPoolId-BlockId, in which PmemDir
-   * is a persistent memory volume chosen by PmemVolumeManager.
+   * The block will be mapped to PmemDir/BlockPoolId/subdir#/subdir#/BlockId,
+   * in which PmemDir is a persistent memory volume chosen by PmemVolumeManager.
    *
    * @param length         The current length of the block.
    * @param blockIn        The block input stream. Should be positioned at the
@@ -146,10 +146,12 @@ public class PmemMappableBlockLoader extends MappableBlockLoader {
   }
 
   @Override
-  public MappableBlock getRestoredMappableBlock(File cacheFile, String bpid)
-      throws IOException {
+  public MappableBlock getRestoredMappableBlock(
+      File cacheFile, String bpid, byte volumeIndex) throws IOException {
     ExtendedBlockId key = new ExtendedBlockId(getBlockId(cacheFile), bpid);
     MappableBlock mappableBlock = new PmemMappedBlock(cacheFile.length(), key);
+    PmemVolumeManager.getInstance().restoreblockKeyToVolume(key, volumeIndex);
+
     String path = PmemVolumeManager.getInstance().getCachePath(key);
     long length = mappableBlock.getLength();
     LOG.info("Restoring the persistent cache for block {}, " +

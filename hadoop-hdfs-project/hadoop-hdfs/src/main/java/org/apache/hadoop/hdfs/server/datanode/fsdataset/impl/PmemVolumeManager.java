@@ -296,9 +296,8 @@ public final class PmemVolumeManager {
       // Scan the cached files in pmem volumes for cache restore.
       for (File cachedFile : cachedFileList) {
         MappableBlock mappableBlock = cacheLoader.
-            getRestoredMappableBlock(cachedFile, bpid);
+            getRestoredMappableBlock(cachedFile, bpid, volumeIndex);
         ExtendedBlockId key = mappableBlock.getKey();
-        blockKeyToVolume.put(key, volumeIndex);
         keyToMappableBlock.put(key, mappableBlock);
         usedBytes += cachedFile.length();
       }
@@ -309,6 +308,10 @@ public final class PmemVolumeManager {
       usedBytesCounts.get(volumeIndex).reserve(usedBytes);
     }
     return keyToMappableBlock;
+  }
+
+  public void restoreblockKeyToVolume(ExtendedBlockId key, byte volumeIndex) {
+    blockKeyToVolume.put(key, volumeIndex);
   }
 
   @VisibleForTesting
@@ -425,15 +428,14 @@ public final class PmemVolumeManager {
    * A cache file is named after the corresponding BlockId.
    * Thus, cache file name can be inferred according to BlockId.
    */
-  public String setAndGetFileName(ExtendedBlockId key) {
+  public String idToCacheFileName(ExtendedBlockId key) {
     return String.valueOf(key.getBlockId());
   }
 
   /**
-   * Considering the pmem volume size is below TB level currently,
-   * it is tolerable to keep cache files under one directory.
-   * The strategy will be optimized, especially if one pmem volume
-   * has huge cache capacity.
+   * Create and get the directory where a cache file with this key and
+   * volumeIndex should be stored. Use hierarchical strategy of storing
+   * blocks to avoid keeping cache files under one directory.
    *
    * @param volumeIndex   The index of pmem volume where a replica will be
    *                      cached to or has been cached to.
@@ -442,21 +444,31 @@ public final class PmemVolumeManager {
    *
    * @return              A path to which the block replica is mapped.
    */
-  public String inferCacheFilePath(Byte volumeIndex, ExtendedBlockId key) {
+  public String idToCacheFilePath(Byte volumeIndex, ExtendedBlockId key)
+      throws IOException {
+    final String CACHE_SUBDIR_PREFIX = "subdir";
+    long blockId = key.getBlockId();
     String bpid = key.getBlockPoolId();
-    return pmemVolumes.get(volumeIndex) + "/" + bpid +
-        "/" + setAndGetFileName(key);
+    int d1 = (int) ((blockId >> 16) & 0x1F);
+    int d2 = (int) ((blockId >> 8) & 0x1F);
+    String parentDir = pmemVolumes.get(volumeIndex) + "/" + bpid;
+    String subDir = CACHE_SUBDIR_PREFIX + d1 + "/" + CACHE_SUBDIR_PREFIX + d2;
+    File filePath = new File(parentDir, subDir);
+    if (!filePath.exists() && !filePath.mkdirs()) {
+      throw new IOException("Failed to create " + filePath.getPath());
+    }
+    return filePath.getAbsolutePath() + "/" + idToCacheFileName(key);
   }
 
   /**
-   * The cache file path is pmemVolume/BlockPoolId/BlockId.
+   * The cache file path is pmemVolume/BlockPoolId/subdir#/subdir#/BlockId.
    */
-  public String getCachePath(ExtendedBlockId key) {
+  public String getCachePath(ExtendedBlockId key) throws IOException {
     Byte volumeIndex = blockKeyToVolume.get(key);
     if (volumeIndex == null) {
       return  null;
     }
-    return inferCacheFilePath(volumeIndex, key);
+    return idToCacheFilePath(volumeIndex, key);
   }
 
   @VisibleForTesting

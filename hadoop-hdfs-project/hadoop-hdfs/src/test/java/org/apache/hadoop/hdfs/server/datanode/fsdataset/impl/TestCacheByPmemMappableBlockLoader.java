@@ -259,16 +259,16 @@ public class TestCacheByPmemMappableBlockLoader {
       // The cachePath shouldn't be null if the replica has been cached
       // to pmem.
       assertNotNull(cachePath);
-      String expectFileName =
-          PmemVolumeManager.getInstance().setAndGetFileName(key);
+      String[] pathList = cachePath.split("/");
+      long expectFileName = Long.parseLong(pathList[pathList.length - 1]);
       if (cachePath.startsWith(PMEM_DIR_0)) {
-        assertTrue(cachePath.equals(PmemVolumeManager
-            .getRealPmemDir(PMEM_DIR_0) + "/" + key.getBlockPoolId() +
-            "/" + expectFileName));
+        assertTrue(cachePath.startsWith(PmemVolumeManager.
+            getRealPmemDir(PMEM_DIR_0) + "/" + key.getBlockPoolId()));
+        assertTrue(key.getBlockId() == expectFileName);
       } else if (cachePath.startsWith(PMEM_DIR_1)) {
-        assertTrue(cachePath.equals(PmemVolumeManager.
-            getRealPmemDir(PMEM_DIR_1) + "/" + key.getBlockPoolId() +
-            "/" + expectFileName));
+        assertTrue(cachePath.startsWith(PmemVolumeManager.
+            getRealPmemDir(PMEM_DIR_1) + "/" + key.getBlockPoolId()));
+        assertTrue(key.getBlockId() == expectFileName);
       } else {
         fail("The cache path is not the expected one: " + cachePath);
       }

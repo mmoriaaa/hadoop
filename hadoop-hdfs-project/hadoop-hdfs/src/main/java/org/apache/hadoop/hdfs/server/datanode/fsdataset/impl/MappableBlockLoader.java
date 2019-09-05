@@ -115,8 +115,8 @@ public abstract class MappableBlockLoader {
   /**
    * Get mappableBlock restored from persistent memory.
    */
-  abstract MappableBlock getRestoredMappableBlock(File cacheFile, String bpid)
-      throws IOException;
+  abstract MappableBlock getRestoredMappableBlock(
+      File cacheFile, String bpid, byte volumeIndex) throws IOException;
 
   /**
    * Clean up cache, can be used during DataNode shutdown.
