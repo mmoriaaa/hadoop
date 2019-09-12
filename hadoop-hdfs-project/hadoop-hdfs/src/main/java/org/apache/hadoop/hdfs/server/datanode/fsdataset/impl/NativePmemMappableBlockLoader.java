@@ -197,10 +197,12 @@ public class NativePmemMappableBlockLoader extends PmemMappableBlockLoader {
     NativeIO.POSIX.PmemMappedRegion region =
         NativeIO.POSIX.Pmem.mapBlock(cacheFile.getAbsolutePath(),
             cacheFile.length(), true);
-    if (region == null)
+    if (region == null) {
       throw new IOException("Failed to restore the block "
           + cacheFile.getName() + " in persistent storage.");
-    ExtendedBlockId key = new ExtendedBlockId(super.getBlockId(cacheFile), bpid);
+    }
+    ExtendedBlockId key =
+        new ExtendedBlockId(super.getBlockId(cacheFile), bpid);
     MappableBlock mappableBlock = new NativePmemMappedBlock(
         region.getAddress(), region.getLength(), key);
     PmemVolumeManager.getInstance().restoreblockKeyToVolume(key, volumeIndex);

@@ -446,13 +446,13 @@ public final class PmemVolumeManager {
    */
   public String idToCacheFilePath(Byte volumeIndex, ExtendedBlockId key)
       throws IOException {
-    final String CACHE_SUBDIR_PREFIX = "subdir";
+    final String cacheSubdirPrefix = "subdir";
     long blockId = key.getBlockId();
     String bpid = key.getBlockPoolId();
     int d1 = (int) ((blockId >> 16) & 0x1F);
     int d2 = (int) ((blockId >> 8) & 0x1F);
     String parentDir = pmemVolumes.get(volumeIndex) + "/" + bpid;
-    String subDir = CACHE_SUBDIR_PREFIX + d1 + "/" + CACHE_SUBDIR_PREFIX + d2;
+    String subDir = cacheSubdirPrefix + d1 + "/" + cacheSubdirPrefix + d2;
     File filePath = new File(parentDir, subDir);
     if (!filePath.exists() && !filePath.mkdirs()) {
       throw new IOException("Failed to create " + filePath.getPath());
