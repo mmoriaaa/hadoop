@@ -81,7 +81,7 @@ typedef struct _oom_listener_descriptors {
 /*
  Clean up allocated resources in a descriptor structure
 */
-inline void cleanup(_oom_listener_descriptors *descriptors) {
+static inline void cleanup(_oom_listener_descriptors *descriptors) {
   close(descriptors->event_fd);
   descriptors->event_fd = -1;
   close(descriptors->event_control_fd);
