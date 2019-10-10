@@ -28,7 +28,6 @@ include_directories(
     main/native/pipes/api
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${OPENSSL_INCLUDE_DIR}
-    /usr/include/tirpc
 )
 
 # Example programs
@@ -75,5 +74,4 @@ target_link_libraries(hadooppipes
     ${OPENSSL_LIBRARIES}
     ${LIB_DL}
     ${LIB_NET}
-    tirpc
 )
