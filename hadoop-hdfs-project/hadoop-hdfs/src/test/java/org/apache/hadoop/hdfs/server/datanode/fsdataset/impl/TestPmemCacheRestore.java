@@ -311,5 +311,32 @@ public class TestPmemCacheRestore {
         fail("The cache path is not the expected one: " + cachePath);
       }
     }
+
+    // Uncache the test file
+    for (ExtendedBlockId key : blockKeys) {
+      cacheManager.uncacheBlock(blockPoolId, key.getBlockId());
+    }
+    // Wait for uncaching
+    GenericTestUtils.waitFor(new Supplier<Boolean>() {
+      @Override
+      public Boolean get() {
+        MetricsRecordBuilder dnMetrics = getMetrics(dn.getMetrics().name());
+        long blocksUncached =
+            MetricsAsserts.getLongCounter("BlocksUncached", dnMetrics);
+        if (blocksUncached != cacheBlocksNum) {
+          LOG.info("waiting for " + cacheBlocksNum + " blocks to be " +
+              "uncached. Right now " + blocksUncached +
+              " blocks are uncached.");
+          return false;
+        }
+        LOG.info(cacheBlocksNum + " blocks have been uncached.");
+        return true;
+      }
+    }, 1000, 30000);
+
+    // It is expected that no pmem cache space is used.
+    assertEquals(0, cacheManager.getCacheUsed());
+    // No record should be kept by blockKeyToVolume after testFile is uncached.
+    assertEquals(blockKeyToVolume.size(), 0);
   }
 }
